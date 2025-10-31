@@ -21,13 +21,13 @@ mkdir -p src/main/java/com/example/airbnb
 mkdir data
 mkdir indexes
 
-Paso 2: Colocar los archivos
+# Colocar los archivos
 pom.xml
 Airbnb-lucene-indexer.java
 
-Paso 3: Preparar los datos
+# Preparar los datos
 Coloca tu archivo CSV con el formato específico en:
-# Mueve tu archivo CSV al directorio data
+## Mueve tu archivo CSV al directorio data
 mv /ruta/de/tu/archivo.csv data/airbnb_data.csv
 text
 airbnb-indexer/
