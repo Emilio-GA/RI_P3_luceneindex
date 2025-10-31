@@ -33,15 +33,15 @@ text
 airbnb-indexer/
 └── data/
     └── airbnb_data.csv  # Tu archivo con el formato completo
-Paso 4: Compilar el proyecto desde la caprpeta raiz
+# Compilar el proyecto desde la caprpeta raiz
 bash
 mvn clean package
 
-Paso 5: Ejecutar la aplicación
+# Ejecutar la aplicación
 Para crear índice de propiedades:
 
-# Para propiedades
+## Para propiedades
 java -jar target/airbnb-indexer-1.0.jar --action create --type property --input data/airbnb_data.csv --indexDir indexes/properties
 
-# Para hosts
+## Para hosts
 java -jar target/airbnb-indexer-1.0.jar --action create --type host --input data/airbnb_data.csv --indexDir indexes/hosts
