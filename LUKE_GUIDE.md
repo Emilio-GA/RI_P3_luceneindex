@@ -218,9 +218,9 @@ name:beach^3 OR description:beach
 | `id` | IntPoint | `id:2708` | `id:2708` |
 | `name` | TextField | `name:beach` | `name:"Beach House"` |
 | `description` | TextField (EnglishAnalyzer) | `description:pool` | `description:swimming` |
-| `neighbourhood_cleansed` | StringField + FacetField | `neighbourhood_cleansed:Hollywood` | `neighbourhood_cleansed:Echo\ Park` ⭐ Categoría |
+| `neighbourhood_cleansed` | StringField | `neighbourhood_cleansed:Hollywood` | `neighbourhood_cleansed:"Los Angeles"` |
 | `location` | LatLonPoint | Búsqueda geográfica | Ver más abajo |
-| `property_type` | StringField + FacetField | `property_type:Entire\ home/apt` | `property_type:Private\ room` ⭐ Categoría |
+| `property_type` | StringField | `property_type:"Entire home/apt"` | `property_type:"Private room"` |
 | `amenity` | TextField (multivaluado) | `amenity:wifi` | `amenity:pool OR amenity:beach` |
 | `amenities` | TextField | `amenities:wifi pool` | `amenities:"wifi pool"` |
 | `price` | DoublePoint | `price:[100 TO 200]` | `price:[50 TO 150]` |
@@ -239,7 +239,7 @@ name:beach^3 OR description:beach
 | `host_since` | LongPoint | `host_since:[2008-09-16 TO *]` | Ver más abajo |
 | `host_location` | TextField (EnglishAnalyzer) | `host_location:"Los Angeles"` | `host_location:California` |
 | `host_about` | TextField (EnglishAnalyzer) | `host_about:professional` | `host_about:writer` |
-| `host_response_time` | StringField + FacetField | `host_response_time:within\ an\ hour` | `host_response_time:within\ a\ few\ hours` ⭐ Categoría |
+| `host_response_time` | StringField | `host_response_time:"within an hour"` | `host_response_time:"within a few hours"` |
 | `host_is_superhost` | IntPoint (0/1) | `host_is_superhost:1` | `host_is_superhost:1` |
 
 ---
@@ -386,173 +386,6 @@ name:beach^3 OR description:beach
 **Priorizar rating alto**
 ```
 name:beach AND review_scores_rating:[4.5 TO 5.0]^2
-```
-
----
-
-## 🏷️ Búsquedas por Categorías (Facets)
-
-### ¿Qué son las Categorías?
-
-Las **categorías** (también llamadas **facets**) son campos especiales que permiten filtrar y agrupar resultados de búsqueda. En tu índice, tienes **3 campos categóricos** que usan `FacetField`:
-
-1. **`neighbourhood_cleansed`** (en propiedades)
-2. **`property_type`** (en propiedades)
-3. **`host_response_time`** (en hosts)
-
-Estos campos están indexados con `FacetField`, lo que permite:
-- Filtrar resultados por categoría
-- Ver conteos de documentos por categoría
-- Navegar jerárquicamente por categorías en Luke
-
-### Cómo Usar Categorías en Luke
-
-#### Método 1: Panel de Facetas (si está disponible)
-
-1. Abre Luke con tu índice
-2. Ve a la pestaña **Search**
-3. Busca el **panel de facetas** o **panel de categorías** (puede estar en un panel lateral o en una pestaña separada)
-4. Selecciona valores de categoría para filtrar automáticamente los resultados
-
-**Nota:** No todas las versiones de Luke muestran el panel de facetas automáticamente. Si no lo ves, usa el Método 2.
-
-#### Método 2: Búsquedas Directas con Categorías
-
-Puedes buscar directamente usando los campos categóricos en la query:
-
-**Búsqueda por Neighbourhood:**
-```lucene
-neighbourhood_cleansed:Hollywood
-neighbourhood_cleansed:Fairfax
-neighbourhood_cleansed:Echo\ Park
-neighbourhood_cleansed:Santa\ Monica
-```
-
-**Búsqueda por Property Type:**
-```lucene
-property_type:Entire\ home/apt
-property_type:Private\ room
-property_type:Entire\ rental\ unit
-```
-
-**Búsqueda por Host Response Time (en índice de hosts):**
-```lucene
-host_response_time:within\ an\ hour
-host_response_time:within\ a\ few\ hours
-host_response_time:N/A
-```
-
-### Ver Valores Únicos de Categorías
-
-Para ver todos los valores únicos de una categoría y sus frecuencias:
-
-1. Ve a la pestaña **Overview**
-2. Busca el campo categórico (ej: `neighbourhood_cleansed`)
-3. Haz clic en el campo
-4. Verás:
-   - Lista de todos los valores únicos
-   - Frecuencia de cada valor (número de documentos)
-   - Ordenados alfabéticamente
-
-**Ejemplo de valores que verás:**
-```
-Hollywood: 1234 documentos
-Fairfax: 319 documentos
-Echo Park: 369 documentos
-Santa Monica: 456 documentos
-...
-```
-
-### Búsquedas Combinadas con Categorías
-
-Puedes combinar búsquedas normales con filtros categóricos:
-
-**Propiedades con wifi en Hollywood:**
-```lucene
-amenity:wifi AND neighbourhood_cleansed:Hollywood
-```
-
-**Propiedades tipo casa completa en Santa Monica:**
-```lucene
-property_type:Entire\ home/apt AND neighbourhood_cleansed:Santa\ Monica
-```
-
-**Propiedades con pool en Fairfax, 2+ habitaciones:**
-```lucene
-amenity:pool AND neighbourhood_cleansed:Fairfax AND bedrooms:[2 TO *]
-```
-
-**Propiedades tipo privada en Echo Park, con buena calificación:**
-```lucene
-property_type:Private\ room AND neighbourhood_cleansed:Echo\ Park AND review_scores_rating:[4.5 TO 5.0]
-```
-
-**Propiedades con wifi Y parking, en Hollywood, tipo casa completa:**
-```lucene
-amenity:wifi AND amenity:parking AND neighbourhood_cleansed:Hollywood AND property_type:Entire\ home/apt
-```
-
-### Búsquedas Múltiples Categorías (OR)
-
-**Propiedades en Hollywood O Fairfax:**
-```lucene
-neighbourhood_cleansed:(Hollywood OR Fairfax)
-```
-
-**Propiedades tipo casa completa O apartamento:**
-```lucene
-property_type:(Entire\ home/apt OR Entire\ rental\ unit)
-```
-
-**Propiedades con wifi en Hollywood O Santa Monica:**
-```lucene
-amenity:wifi AND neighbourhood_cleansed:(Hollywood OR Santa\ Monica)
-```
-
-### Tips para Búsquedas por Categorías
-
-1. **Case-sensitive:** Los campos categóricos requieren coincidencia exacta de mayúsculas/minúsculas
-   - ✅ `neighbourhood_cleansed:Fairfax` (correcto)
-   - ❌ `neighbourhood_cleansed:fairfax` (puede no funcionar)
-
-2. **Escapa espacios:** Usa `\` para escapar espacios en valores
-   - ✅ `neighbourhood_cleansed:Echo\ Park`
-   - ✅ `property_type:Entire\ home/apt`
-
-3. **No uses comillas:** Los campos categóricos no permiten búsquedas de frase con comillas
-   - ❌ `neighbourhood_cleansed:"Echo Park"` (error)
-   - ✅ `neighbourhood_cleansed:Echo\ Park` (correcto)
-
-4. **Combina con otros campos:** Puedes combinar categorías con cualquier otro campo
-   ```lucene
-   amenity:wifi AND neighbourhood_cleansed:Hollywood AND price:[100 TO 200] AND bedrooms:[2 TO 3]
-   ```
-
-### Ejemplos Prácticos de Categorías
-
-**Buscar todas las propiedades en Hollywood:**
-```lucene
-neighbourhood_cleansed:Hollywood
-```
-
-**Buscar propiedades tipo casa completa:**
-```lucene
-property_type:Entire\ home/apt
-```
-
-**Buscar propiedades en Fairfax con wifi:**
-```lucene
-neighbourhood_cleansed:Fairfax AND amenity:wifi
-```
-
-**Buscar propiedades tipo privada en Echo Park con buena calificación:**
-```lucene
-property_type:Private\ room AND neighbourhood_cleansed:Echo\ Park AND review_scores_rating:[4.5 TO *]
-```
-
-**Buscar propiedades con pool en Hollywood, precio razonable:**
-```lucene
-amenity:pool AND neighbourhood_cleansed:Hollywood AND price:[100 TO 200]
 ```
 
 ---
@@ -768,17 +601,9 @@ amenity:pool                             # Con piscina
 price:[100 TO 200]                       # Precio entre $100-$200
 review_scores_rating:[4.5 TO 5.0]        # Rating 4.5+
 bedrooms:[2 TO 3]                        # 2-3 habitaciones
-neighbourhood_cleansed:Hollywood         # En Hollywood (categoría)
-property_type:Entire\ home/apt          # Casa completa (categoría)
+neighbourhood_cleansed:Hollywood         # En Hollywood
+property_type:"Entire home/apt"          # Casa completa
 host_is_superhost:1                      # Superhost
-```
-
-### Búsquedas por Categorías
-```
-neighbourhood_cleansed:Fairfax          # Por neighbourhood (categoría)
-property_type:Private\ room             # Por tipo (categoría)
-host_response_time:within\ an\ hour     # Por response time (categoría)
-neighbourhood_cleansed:Hollywood AND property_type:Entire\ home/apt  # Combinar categorías
 ```
 
 ---

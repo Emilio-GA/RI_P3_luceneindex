@@ -1,5 +1,8 @@
 import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
+import org.apache.lucene.analysis.core.KeywordTokenizer;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
@@ -39,6 +42,10 @@ import com.google.gson.GsonBuilder;
  * 
  * EJECUCIÓN:
  *   java -cp ".:lucene-10.3.1/modules/*:lucene-10.3.1/modules-thirdparty/*:lib/*" AirbnbIndexador --input example_listings.csv --index-root ./index_root [opciones]
+ * 
+ * LUKE:
+ *  ./lucene-10.3.1/bin/luke.sh "$(pwd)/index_root/index_properties" &
+ *  ./lucene-10.3.1/bin/luke.sh "$(pwd)/index_root/index_hosts" &
  * 
  * ARGUMENTOS CLI:
  *   --input <ruta>           : (OBLIGATORIO) Ruta al archivo CSV de entrada (ej: example_listings.csv)
@@ -250,10 +257,20 @@ public class AirbnbIndexador {
         perField.put("host_about", new EnglishAnalyzer());
         perField.put("host_location", new EnglishAnalyzer());
         
-        // Campos categóricos (keyword)
-        perField.put("neighbourhood_cleansed", new KeywordAnalyzer());
-        perField.put("property_type", new KeywordAnalyzer());
-        perField.put("host_response_time", new KeywordAnalyzer());
+        // Analyzer personalizado para campos categóricos: keyword + lowercase
+        Analyzer lowercaseKeywordAnalyzer = new Analyzer() {
+            @Override
+            protected TokenStreamComponents createComponents(String fieldName) {
+                KeywordTokenizer tokenizer = new KeywordTokenizer();
+                TokenStream filter = new LowerCaseFilter(tokenizer);
+                return new TokenStreamComponents(tokenizer, filter);
+            }
+        };
+        
+        // Campos categóricos (keyword + lowercase para case-insensitive)
+        perField.put("neighbourhood_cleansed", lowercaseKeywordAnalyzer);
+        perField.put("property_type", lowercaseKeywordAnalyzer);
+        perField.put("host_response_time", lowercaseKeywordAnalyzer);
         
         return new PerFieldAnalyzerWrapper(defaultAnalyzer, perField);
     }
@@ -450,11 +467,15 @@ public class AirbnbIndexador {
         addTextField(doc, "description", htmlToText(get(cols, "description")), true);
 
         // neighbourhood_cleansed (FacetField para facetado + StringField para búsqueda)
+        // Normalizar a lowercase para evitar problemas de case-sensitivity con KeywordAnalyzer
         String neighbourhood = get(cols, "neighbourhood_cleansed");
         if (neighbourhood != null && !neighbourhood.isBlank()) {
-            doc.add(new FacetField("neighbourhood_cleansed", neighbourhood));
-            doc.add(new StringField("neighbourhood_cleansed", neighbourhood, Field.Store.YES));
-            doc.add(new SortedDocValuesField("neighbourhood_cleansed", new org.apache.lucene.util.BytesRef(neighbourhood)));
+            String neighbourhoodNormalized = neighbourhood.trim().toLowerCase();
+            // Guardar valor original para stored field
+            doc.add(new StoredField("neighbourhood_cleansed_original", neighbourhood.trim()));
+            doc.add(new FacetField("neighbourhood_cleansed", neighbourhoodNormalized));
+            doc.add(new StringField("neighbourhood_cleansed", neighbourhoodNormalized, Field.Store.YES));
+            doc.add(new SortedDocValuesField("neighbourhood_cleansed", new org.apache.lucene.util.BytesRef(neighbourhoodNormalized)));
         }
 
         // latitude / longitude (LatLonPoint + Stored + DocValues)
@@ -468,11 +489,15 @@ public class AirbnbIndexador {
         }
 
         // property_type (FacetField para facetado + StringField para búsqueda)
+        // Normalizar a lowercase para evitar problemas de case-sensitivity con KeywordAnalyzer
         String propertyType = get(cols, "property_type");
         if (propertyType != null && !propertyType.isBlank()) {
-            doc.add(new FacetField("property_type", propertyType));
-            doc.add(new StringField("property_type", propertyType, Field.Store.YES));
-            doc.add(new SortedDocValuesField("property_type", new org.apache.lucene.util.BytesRef(propertyType)));
+            String propertyTypeNormalized = propertyType.trim().toLowerCase();
+            // Guardar valor original para stored field
+            doc.add(new StoredField("property_type_original", propertyType.trim()));
+            doc.add(new FacetField("property_type", propertyTypeNormalized));
+            doc.add(new StringField("property_type", propertyTypeNormalized, Field.Store.YES));
+            doc.add(new SortedDocValuesField("property_type", new org.apache.lucene.util.BytesRef(propertyTypeNormalized)));
         }
 
         // amenities (TextField multivaluado)
@@ -576,11 +601,15 @@ public class AirbnbIndexador {
         addTextField(doc, "host_about", htmlToText(get(cols, "host_about")), true);
 
         // host_response_time (FacetField para facetado + StringField para búsqueda)
+        // Normalizar a lowercase para evitar problemas de case-sensitivity con KeywordAnalyzer
         String responseTime = get(cols, "host_response_time");
         if (responseTime != null && !responseTime.isBlank()) {
-            doc.add(new FacetField("host_response_time", responseTime));
-            doc.add(new StringField("host_response_time", responseTime, Field.Store.YES));
-            doc.add(new SortedDocValuesField("host_response_time", new org.apache.lucene.util.BytesRef(responseTime)));
+            String responseTimeNormalized = responseTime.trim().toLowerCase();
+            // Guardar valor original para stored field
+            doc.add(new StoredField("host_response_time_original", responseTime.trim()));
+            doc.add(new FacetField("host_response_time", responseTimeNormalized));
+            doc.add(new StringField("host_response_time", responseTimeNormalized, Field.Store.YES));
+            doc.add(new SortedDocValuesField("host_response_time", new org.apache.lucene.util.BytesRef(responseTimeNormalized)));
         }
 
         // host_is_superhost (IntPoint 0/1, stored + docvalues)
