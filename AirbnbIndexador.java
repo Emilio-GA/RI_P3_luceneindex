@@ -4,6 +4,7 @@ import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.*;
+import org.apache.lucene.facet.FacetField;
 import org.apache.lucene.index.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
@@ -448,9 +449,10 @@ public class AirbnbIndexador {
         // description (TextField con EnglishAnalyzer, stored)
         addTextField(doc, "description", htmlToText(get(cols, "description")), true);
 
-        // neighbourhood_cleansed (StringField, stored + docvalues)
+        // neighbourhood_cleansed (FacetField para facetado + StringField para búsqueda)
         String neighbourhood = get(cols, "neighbourhood_cleansed");
         if (neighbourhood != null && !neighbourhood.isBlank()) {
+            doc.add(new FacetField("neighbourhood_cleansed", neighbourhood));
             doc.add(new StringField("neighbourhood_cleansed", neighbourhood, Field.Store.YES));
             doc.add(new SortedDocValuesField("neighbourhood_cleansed", new org.apache.lucene.util.BytesRef(neighbourhood)));
         }
@@ -465,29 +467,21 @@ public class AirbnbIndexador {
             doc.add(new LatLonDocValuesField("location", lat, lon));
         }
 
-        // property_type (StringField, stored + docvalues)
+        // property_type (FacetField para facetado + StringField para búsqueda)
         String propertyType = get(cols, "property_type");
         if (propertyType != null && !propertyType.isBlank()) {
+            doc.add(new FacetField("property_type", propertyType));
             doc.add(new StringField("property_type", propertyType, Field.Store.YES));
             doc.add(new SortedDocValuesField("property_type", new org.apache.lucene.util.BytesRef(propertyType)));
         }
 
-        // amenities (TextField multivaluado + StoredField original)
+        // amenities (TextField multivaluado)
         String amenitiesRaw = get(cols, "amenities");
         if (amenitiesRaw != null && !amenitiesRaw.isBlank()) {
-            // Guardar original
-            doc.add(new StoredField("amenities_raw", amenitiesRaw));
-            
-            // Parsear y indexar como texto tokenizado
+            // Parsear y indexar cada amenidad individual como campo multivaluado
             List<String> amenList = parseAmenities(amenitiesRaw);
-            StringBuilder amenText = new StringBuilder();
             for (String amenity : amenList) {
                 doc.add(new TextField("amenity", amenity, Field.Store.YES));
-                if (amenText.length() > 0) amenText.append(' ');
-                amenText.append(amenity);
-            }
-            if (amenText.length() > 0) {
-                doc.add(new TextField("amenities", amenText.toString(), Field.Store.YES));
             }
         }
 
@@ -581,9 +575,10 @@ public class AirbnbIndexador {
         // host_about (TextField con EnglishAnalyzer, stored)
         addTextField(doc, "host_about", htmlToText(get(cols, "host_about")), true);
 
-        // host_response_time (StringField, stored + docvalues)
+        // host_response_time (FacetField para facetado + StringField para búsqueda)
         String responseTime = get(cols, "host_response_time");
         if (responseTime != null && !responseTime.isBlank()) {
+            doc.add(new FacetField("host_response_time", responseTime));
             doc.add(new StringField("host_response_time", responseTime, Field.Store.YES));
             doc.add(new SortedDocValuesField("host_response_time", new org.apache.lucene.util.BytesRef(responseTime)));
         }
