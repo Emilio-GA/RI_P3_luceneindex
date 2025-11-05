@@ -63,6 +63,65 @@ De esta forma, Lucene manejará correctamente los campos ausentes y las ordenaci
 
 ---
 
+## 📋 Campos indexados
+
+### Índice de Propiedades (`index_properties/`)
+
+Los siguientes campos se indexan para cada propiedad:
+
+**Identificadores y URLs:**
+- `id` (IntPoint + StoredField) - ID único de la propiedad
+- `listing_url` (StringField, stored) - URL de la propiedad
+- `host_id` (StringField + SortedDocValuesField, stored) - ID del anfitrión
+
+**Texto (tokenizado):**
+- `name` (TextField, stored) - Nombre de la propiedad
+- `description` (TextField, stored, EnglishAnalyzer) - Descripción completa
+- `neighborhood_overview` (TextField, stored, EnglishAnalyzer) - Resumen del barrio
+- `bathrooms_text` (TextField, stored) - Texto descriptivo de baños
+
+**Categorías y facetas:**
+- `neighbourhood_cleansed` (FacetField + StringField + SortedDocValuesField, stored) - Barrio normalizado
+- `property_type` (FacetField + StringField + SortedDocValuesField, stored) - Tipo de propiedad
+
+**Geolocalización:**
+- `location` (LatLonPoint + LatLonDocValuesField) - Coordenadas geográficas
+- `latitude` (StoredField) - Latitud almacenada
+- `longitude` (StoredField) - Longitud almacenada
+
+**Numéricos:**
+- `price` (DoublePoint + StoredField + DoubleDocValuesField) - Precio
+- `number_of_reviews` (IntPoint + StoredField + NumericDocValuesField) - Número de reseñas
+- `review_scores_rating` (DoublePoint + StoredField + DoubleDocValuesField) - Puntuación promedio
+- `bathrooms` (IntPoint + StoredField + NumericDocValuesField) - Número de baños
+- `bedrooms` (IntPoint + StoredField + NumericDocValuesField) - Número de dormitorios
+
+**Multivaluado:**
+- `amenity` (TextField, stored, multivaluado) - Lista de amenidades
+
+### Índice de Anfitriones (`index_hosts/`)
+
+Los siguientes campos se indexan para cada anfitrión:
+
+**Identificadores:**
+- `host_id` (StringField + SortedDocValuesField, not stored) - ID único del anfitrión
+- `host_url` (StringField, stored) - URL del perfil del anfitrión
+
+**Texto (tokenizado):**
+- `host_name` (TextField, stored) - Nombre del anfitrión
+- `host_location` (TextField, EnglishAnalyzer, not stored) - Ubicación del anfitrión
+- `host_neighbourhood` (TextField, stored) - Barrio del anfitrión
+- `host_about` (TextField, stored, EnglishAnalyzer) - Descripción del anfitrión
+
+**Categorías y facetas:**
+- `host_response_time` (FacetField + StringField + SortedDocValuesField, stored) - Tiempo de respuesta
+
+**Numéricos:**
+- `host_since` (LongPoint + StoredField + NumericDocValuesField) - Fecha desde que es anfitrión (epoch millis)
+- `host_is_superhost` (IntPoint + StoredField + NumericDocValuesField) - 0/1 si es superhost
+
+---
+
 ## 🔗 Relación host–propiedad
 
 - **index_hosts**: un documento por `host_id` (clave primaria).
@@ -92,14 +151,25 @@ host_id:"3008"
 neighbourhood_cleansed:"Hollywood" AND price:[0 TO 150]
 ```
 
-### D) Buscar texto en nombre o descripción
+### D) Buscar texto en nombre, descripción o resumen del barrio
 ```
-name:(Zen OR Runyon) OR description:"master suite"
+name:(Zen OR Runyon) OR description:"master suite" OR neighborhood_overview:"beach"
 ```
 
 ### E) Filtrar por geolocalización (en Luke, si está disponible)
 ```
 location within 5km of (34.105,-118.34)
+```
+
+### F) Buscar por URL de listing o host
+```
+listing_url:"*airbnb.com/rooms/*"
+host_url:"*airbnb.com/users/*"
+```
+
+### G) Filtrar por barrio del anfitrión
+```
+host_neighbourhood:"Hollywood Hills"
 ```
 
 ---

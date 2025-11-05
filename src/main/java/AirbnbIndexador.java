@@ -246,6 +246,7 @@ public class AirbnbIndexador {
         
         // Campos en inglés
         perField.put("description", new EnglishAnalyzer());
+        perField.put("neighborhood_overview", new EnglishAnalyzer());
         perField.put("host_about", new EnglishAnalyzer());
         perField.put("host_location", new EnglishAnalyzer());
         
@@ -452,11 +453,20 @@ public class AirbnbIndexador {
         }
         doc.add(new IntPoint("id", id));
 
+        // listing_url (StringField, stored - URL)
+        String listingUrl = get(cols, "listing_url");
+        if (listingUrl != null && !listingUrl.isBlank()) {
+            doc.add(new StringField("listing_url", listingUrl.trim(), Field.Store.YES));
+        }
+
         // name (TextField, stored)
         addTextField(doc, "name", get(cols, "name"), true);
 
         // description (TextField con EnglishAnalyzer, stored)
         addTextField(doc, "description", htmlToText(get(cols, "description")), true);
+
+        // neighborhood_overview (TextField con EnglishAnalyzer, stored)
+        addTextField(doc, "neighborhood_overview", htmlToText(get(cols, "neighborhood_overview")), true);
 
         // neighbourhood_cleansed (FacetField para facetado + StringField para búsqueda)
         // Normalizar a lowercase para evitar problemas de case-sensitivity con KeywordAnalyzer
@@ -570,6 +580,12 @@ public class AirbnbIndexador {
         doc.add(new StringField("host_id", hostId, Field.Store.NO));
         doc.add(new SortedDocValuesField("host_id", new org.apache.lucene.util.BytesRef(hostId)));
 
+        // host_url (StringField, stored - URL)
+        String hostUrl = get(cols, "host_url");
+        if (hostUrl != null && !hostUrl.isBlank()) {
+            doc.add(new StringField("host_url", hostUrl.trim(), Field.Store.YES));
+        }
+
         // host_name (TextField, stored)
         addTextField(doc, "host_name", get(cols, "host_name"), true);
 
@@ -588,6 +604,9 @@ public class AirbnbIndexador {
 
         // host_location (TextField con EnglishAnalyzer, no stored)
         addTextField(doc, "host_location", get(cols, "host_location"), false);
+
+        // host_neighbourhood (TextField, stored)
+        addTextField(doc, "host_neighbourhood", get(cols, "host_neighbourhood"), true);
 
         // host_about (TextField con EnglishAnalyzer, stored)
         addTextField(doc, "host_about", htmlToText(get(cols, "host_about")), true);
