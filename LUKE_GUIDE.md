@@ -174,14 +174,26 @@ bedrooms:[2 TO 5]
 - `{` `}` = exclusivo (excluye el valor)
 - `*` = sin límite
 
+**⚠️ Limitación de Luke:**
+- ❌ Los campos `DoublePoint` (`price`, `review_scores_rating`) **NO funcionan en Luke Search**
+- ✅ Los campos `IntPoint` (`number_of_reviews`, `bedrooms`, `bathrooms`) **SÍ funcionan en Luke Search**
+- ✅ Todas las queries funcionan **perfectamente en código Java**
+
 **Ejemplos:**
 ```
-price:[50 TO 150]          # Entre $50 y $150 (inclusivo)
-price:[50 TO 150}          # $50 inclusivo, $150 exclusivo
-price:[100 TO *]           # $100 o más
-review_scores_rating:[4.0 TO 5.0]  # Rating entre 4.0 y 5.0
-bedrooms:[2 TO *]          # 2 o más habitaciones
+# Estos SÍ funcionan en Luke:
+number_of_reviews:[10 TO *]     # ✅ Funciona
+bedrooms:[2 TO *]               # ✅ Funciona
+bathrooms:[1 TO 2]              # ✅ Funciona
+
+# Estos NO funcionan en Luke (usa código Java):
+price:[50 TO 150]               # ❌ ERROR en Luke
+price:[50 TO 150}               # ❌ ERROR en Luke
+price:[100 TO *]                # ❌ ERROR en Luke
+review_scores_rating:[4.0 TO 5.0]  # ❌ ERROR en Luke
 ```
+
+**Nota:** Los ejemplos de `price` y `review_scores_rating` funcionan correctamente en código Java, pero no en la interfaz de Luke. Ver sección [Troubleshooting](#troubleshooting) para más detalles.
 
 #### Búsquedas de Proximidad (Fuzzy)
 
@@ -223,12 +235,14 @@ name:beach^3 OR description:beach
 | `property_type` | StringField | `property_type:"Entire home/apt"` | `property_type:"Private room"` |
 | `amenity` | TextField (multivaluado) | `amenity:wifi` | `amenity:pool OR amenity:beach` |
 | `amenities` | TextField | `amenities:wifi pool` | `amenities:"wifi pool"` |
-| `price` | DoublePoint | `price:[100 TO 200]` | `price:[50 TO 150]` |
-| `number_of_reviews` | IntPoint | `number_of_reviews:[10 TO *]` | `number_of_reviews:[5 TO 50]` |
-| `review_scores_rating` | DoublePoint | `review_scores_rating:[4.5 TO 5.0]` | `review_scores_rating:[4.0 TO *]` |
-| `bathrooms` | IntPoint | `bathrooms:[1 TO 2]` | `bathrooms:2` |
-| `bedrooms` | IntPoint | `bedrooms:[2 TO 3]` | `bedrooms:[1 TO *]` |
+| `price` | DoublePoint | `price:[100 TO 200]` ❌ | `price:[50 TO 150]` ❌ |
+| `number_of_reviews` | IntPoint | `number_of_reviews:[10 TO *]` ✅ | `number_of_reviews:[5 TO 50]` ✅ |
+| `review_scores_rating` | DoublePoint | `review_scores_rating:[4.5 TO 5.0]` ❌ | `review_scores_rating:[4.0 TO *]` ❌ |
+| `bathrooms` | IntPoint | `bathrooms:[1 TO 2]` ✅ | `bathrooms:2` ✅ |
+| `bedrooms` | IntPoint | `bedrooms:[2 TO 3]` ✅ | `bedrooms:[1 TO *]` ✅ |
 | `host_id` | StringField | `host_id:3008` | `host_id:3008` |
+
+**⚠️ Nota:** Los campos `DoublePoint` (`price`, `review_scores_rating`) **NO funcionan en Luke Search** debido a una limitación de la interfaz. Funcionan perfectamente en código Java. Ver sección [Troubleshooting](#troubleshooting) para más detalles.
 
 ### Esquema de Campos - Hosts (`index_hosts`)
 
@@ -284,19 +298,31 @@ amenities:"wifi pool parking"
 ```
 
 ### 6. Buscar por Precio
+
+**⚠️ Limitación de Luke:** Los campos `DoublePoint` como `price` **NO funcionan en Luke Search**. Usa código Java para buscar por precio.
+
 ```
-price:[50 TO 100]
-price:[100 TO *]
-price:[* TO 150]
-price:[80 TO 120]
+# Estos NO funcionan en Luke (usa código Java):
+price:[50 TO 100]      # ❌ ERROR
+price:[100 TO *]       # ❌ ERROR
+price:[* TO 150]       # ❌ ERROR
+price:[80 TO 120]      # ❌ ERROR
 ```
 
+**Alternativa:** Usa la pestaña **Documents** para explorar documentos individuales y ver sus valores de `price`.
+
 ### 7. Buscar por Rating
+
+**⚠️ Limitación de Luke:** Los campos `DoublePoint` como `review_scores_rating` **NO funcionan en Luke Search**. Usa código Java para buscar por rating.
+
 ```
-review_scores_rating:[4.5 TO 5.0]
-review_scores_rating:[4.0 TO *]
-review_scores_rating:[* TO 3.0]
+# Estos NO funcionan en Luke (usa código Java):
+review_scores_rating:[4.5 TO 5.0]  # ❌ ERROR
+review_scores_rating:[4.0 TO *]     # ❌ ERROR
+review_scores_rating:[* TO 3.0]    # ❌ ERROR
 ```
+
+**Alternativa:** Usa la pestaña **Documents** para explorar documentos individuales y ver sus valores de `review_scores_rating`.
 
 ### 8. Buscar por Número de Reviews
 ```
@@ -322,7 +348,14 @@ bathrooms:[2 TO *]
 ### 11. Búsquedas Combinadas (Complejas)
 
 **Propiedad con piscina en Hollywood, precio $100-200, rating 4.5+**
+
+⚠️ **Nota:** Esta query incluye campos `DoublePoint` que no funcionan en Luke Search. Usa código Java.
+
 ```
+# En Luke (sin price y rating):
+amenity:pool AND neighbourhood_cleansed:Hollywood
+
+# En código Java (funciona completo):
 amenity:pool AND neighbourhood_cleansed:Hollywood AND price:[100 TO 200] AND review_scores_rating:[4.5 TO 5.0]
 ```
 
@@ -333,12 +366,26 @@ property_type:"Entire home/apt" AND neighbourhood_cleansed:(Santa\ Monica OR Ven
 *Nota: Espacios en nombres deben escaparse con `\`*
 
 **Apartamento con 2+ habitaciones, 1+ baños, precio razonable**
+
+⚠️ **Nota:** Esta query incluye campos `DoublePoint` que no funcionan en Luke Search. Usa código Java.
+
 ```
+# En Luke (sin price y rating):
+bedrooms:[2 TO *] AND bathrooms:[1 TO *]
+
+# En código Java (funciona completo):
 bedrooms:[2 TO *] AND bathrooms:[1 TO *] AND price:[50 TO 150] AND review_scores_rating:[4.0 TO *]
 ```
 
 **Propiedades con buena calificación y muchas reviews**
+
+⚠️ **Nota:** Esta query incluye `review_scores_rating` que no funciona en Luke Search. Usa código Java.
+
 ```
+# En Luke (solo number_of_reviews):
+number_of_reviews:[20 TO *]
+
+# En código Java (funciona completo):
 review_scores_rating:[4.5 TO 5.0] AND number_of_reviews:[20 TO *]
 ```
 
@@ -560,6 +607,89 @@ host_response_time:within\ an\ hour
 host_response_time:"within a few hours"
 ```
 
+### Error: "Field price is indexed with 8 bytes per dimension, but IntComparator expected 4"
+### Error: "field was indexed with bytesPerDim=8 but this query has bytesPerDim=4"
+
+**Problema:** Intentaste usar un campo `DoublePoint` (como `price` o `review_scores_rating`) en la pestaña **Search** de Luke, ya sea para búsqueda con rangos o para ordenamiento. Luke está intentando usar un formato de 4 bytes (IntPoint) en lugar de 8 bytes (DoublePoint) para procesar estos campos.
+
+**Mensajes de error que puedes ver:**
+- `Field price is indexed with 8 bytes per dimension, but IntComparator expected 4`
+- `field="review_scores_rating" was indexed with bytesPerDim=8 but this query has bytesPerDim=4`
+
+Ambos errores indican el mismo problema: Luke está intentando usar `IntPoint` (4 bytes) en lugar de `DoublePoint` (8 bytes).
+
+**Causa:** Esta es una limitación conocida de la interfaz de Luke. Cuando usas un campo `DoublePoint` en una búsqueda (incluso en range queries como `price:[1 TO 100]` o `review_scores_rating:[3 TO 4]`) o intentas ordenar por él, Luke detecta incorrectamente el tipo de campo y crea un query con el tipo numérico equivocado.
+
+**Campos afectados:**
+- `price` (DoublePoint - 8 bytes) ❌ **NO funciona en Luke Search**
+- `review_scores_rating` (DoublePoint - 8 bytes) ❌ **NO funciona en Luke Search**
+- Cualquier campo indexado como `DoublePoint` (no `IntPoint`)
+
+**⚠️ Limitación importante:**
+❌ **NO puedes usar campos `DoublePoint` en la pestaña Search de Luke:**
+- ❌ No uses range queries: `price:[1 TO 100]` → **ERROR**
+- ❌ No uses sorting por estos campos → **ERROR**
+- ❌ Incluso combinaciones fallan: `price:[100 TO 200] AND name:beach` → **ERROR**
+
+✅ **Campos que SÍ funcionan en Luke Search:**
+- `number_of_reviews` (IntPoint) ✅ Funciona
+- `bedrooms` (IntPoint) ✅ Funciona
+- `bathrooms` (IntPoint) ✅ Funciona
+- Todos los campos `IntPoint` ✅ Funcionan correctamente
+
+**Solución y alternativas:**
+
+1. **Usa la pestaña Documents para explorar:**
+   - Navega por documentos individuales
+   - Verifica que los valores de `price` y `review_scores_rating` están correctamente indexados
+   - Revisa los valores stored para confirmar que los datos están bien
+
+2. **Escribe código Java para buscar:**
+   - Las búsquedas con `DoublePoint` funcionan **perfectamente** en código Java
+   - Puedes usar `DoublePoint.newRangeQuery()` o queries con rangos
+   - Puedes ordenar usando `DoubleComparator` correctamente
+   - Este es un problema **solo de la interfaz de Luke**, no de Lucene
+
+3. **Busca por otros campos que sí funcionan:**
+   ```
+   # Estos funcionan en Luke:
+   name:beach
+   description:pool
+   neighbourhood_cleansed:Hollywood
+   number_of_reviews:[10 TO *]
+   bedrooms:[2 TO 3]
+   bathrooms:[1 TO 2]
+   
+   # Estos NO funcionan en Luke (usa código Java):
+   price:[100 TO 200]              # ❌ ERROR
+   review_scores_rating:[4.5 TO 5.0]  # ❌ ERROR
+   ```
+
+**Nota importante:**
+- El índice está **correctamente configurado** - `price` está indexado como `DoublePoint` (8 bytes)
+- Este es un **problema de la interfaz de Luke**, no de tu código de indexación
+- **Lucene funciona perfectamente** - puedes usar estos campos normalmente en tu aplicación Java
+- Si necesitas buscar por `price` o `review_scores_rating`, escribe código Java usando las APIs de Lucene
+
+**Ejemplo de búsqueda que funciona en Luke:**
+```
+# Buscar por otros campos (funciona)
+name:beach AND neighbourhood_cleansed:Hollywood
+number_of_reviews:[10 TO *] AND bedrooms:[2 TO 3]
+amenity:pool AND bathrooms:[1 TO 2]
+```
+
+**Ejemplo de código Java para buscar por price (funciona correctamente):**
+```java
+// Esto funciona perfectamente en código Java
+Query priceQuery = DoublePoint.newRangeQuery("price", 100.0, 200.0);
+Query nameQuery = new TermQuery(new Term("name", "beach"));
+BooleanQuery combined = new BooleanQuery.Builder()
+    .add(priceQuery, BooleanClause.Occur.MUST)
+    .add(nameQuery, BooleanClause.Occur.MUST)
+    .build();
+```
+
 ---
 
 ## 📝 Cheat Sheet Rápido
@@ -583,10 +713,15 @@ término1 NOT término2                    # Excluye término2
 
 ### Búsquedas Numéricas
 ```
+# IntPoint (funciona en Luke):
 campo:[100 TO 200]                       # Rango inclusivo
 campo:[100 TO 200}                       # 100 inclusivo, 200 exclusivo
 campo:[100 TO *]                         # 100 o más
 campo:[* TO 200]                         # 200 o menos
+
+# DoublePoint (NO funciona en Luke, usa código Java):
+price:[100 TO 200]                       # ❌ ERROR en Luke
+review_scores_rating:[4.5 TO 5.0]        # ❌ ERROR en Luke
 ```
 
 ### Boost y Relevancia
@@ -597,13 +732,16 @@ campo:valor^3                            # Triplica relevancia
 
 ### Ejemplos Airbnb Rápidos
 ```
+# Estos funcionan en Luke:
 amenity:pool                             # Con piscina
-price:[100 TO 200]                       # Precio entre $100-$200
-review_scores_rating:[4.5 TO 5.0]        # Rating 4.5+
 bedrooms:[2 TO 3]                        # 2-3 habitaciones
 neighbourhood_cleansed:Hollywood         # En Hollywood
 property_type:"Entire home/apt"          # Casa completa
 host_is_superhost:1                      # Superhost
+
+# Estos NO funcionan en Luke (usa código Java):
+price:[100 TO 200]                       # ❌ ERROR en Luke
+review_scores_rating:[4.5 TO 5.0]        # ❌ ERROR en Luke
 ```
 
 ---
