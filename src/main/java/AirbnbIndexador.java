@@ -1,6 +1,5 @@
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.core.KeywordAnalyzer;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 import org.apache.lucene.analysis.core.LowerCaseFilter;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
@@ -14,7 +13,6 @@ import org.apache.lucene.store.FSDirectory;
 
 import java.io.*;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,8 +23,6 @@ import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 /**
  * Indexador Lucene para datos de Airbnb Los Angeles (Jun 2025)
@@ -35,7 +31,7 @@ import com.google.gson.GsonBuilder;
  * - index_properties/ : para propiedades/listings
  * - index_hosts/ : para anfitriones/hosts
  * 
- * Implementa upsert por ID, rebuild completo, logging y metadatos JSON.
+ * Implementa upsert por ID, rebuild completo y logging.
  * 
  * COMPILACIÓN:
  *   javac -cp "lucene-10.3.1/modules/*:lucene-10.3.1/modules-thirdparty/*:lib/*" AirbnbIndexador.java
@@ -74,7 +70,6 @@ public class AirbnbIndexador {
     private static final int COMMIT_INTERVAL = 5000;
     private static final String INDEX_PROPERTIES = "index_properties";
     private static final String INDEX_HOSTS = "index_hosts";
-    private static final String META_FILE = "INDEX_META.json";
 
     // Configuración de la aplicación
     private final Config config;
@@ -167,9 +162,6 @@ public class AirbnbIndexador {
 
             // Cerrar índices
             cerrarIndices(logger);
-
-            // Generar metadatos
-            generarMetadatos(logger);
 
             // Resumen final
             long tiempoTotal = System.currentTimeMillis() - inicioTiempo.get();
@@ -650,83 +642,6 @@ public class AirbnbIndexador {
         }
     }
 
-    /**
-     * Genera archivos INDEX_META.json en cada índice
-     */
-    private void generarMetadatos(Logger logger) throws IOException {
-        Path indexRootPath = Paths.get(config.indexRoot);
-        
-        Map<String, Object> meta = new HashMap<>();
-        meta.put("fecha", new Date().toString());
-        meta.put("version", "1.0");
-        meta.put("parametros", Map.of(
-            "input", config.input,
-            "mode", config.mode,
-            "delimiter", config.delimiter,
-            "encoding", config.encoding,
-            "threads", config.threads,
-            "maxErrors", config.maxErrors
-        ));
-        meta.put("estadisticas", Map.of(
-            "propiedades", totalPropiedades.get(),
-            "hosts", totalHosts.get(),
-            "errores", errores.get(),
-            "tiempo_ms", System.currentTimeMillis() - inicioTiempo.get()
-        ));
-
-        // Esquema de campos (simplificado para el ejemplo)
-        Map<String, Object> schemaProperties = new HashMap<>();
-        schemaProperties.put("id", "IntPoint");
-        schemaProperties.put("name", "TextField(StandardAnalyzer)");
-        schemaProperties.put("description", "TextField(EnglishAnalyzer)");
-        meta.put("schema_properties", schemaProperties);
-
-        Map<String, Object> schemaHosts = new HashMap<>();
-        schemaHosts.put("host_id", "StringField");
-        schemaHosts.put("host_name", "TextField(StandardAnalyzer)");
-        meta.put("schema_hosts", schemaHosts);
-
-        // Escribir metadatos en ambos índices
-        try {
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            String json = gson.toJson(meta);
-            
-            Files.write(indexRootPath.resolve(INDEX_PROPERTIES).resolve(META_FILE), 
-                       json.getBytes(StandardCharsets.UTF_8));
-            Files.write(indexRootPath.resolve(INDEX_HOSTS).resolve(META_FILE), 
-                       json.getBytes(StandardCharsets.UTF_8));
-            
-            logger.info("Metadatos generados en ambos índices");
-        } catch (Exception e) {
-            logger.warn("No se pudo generar metadatos JSON (Gson no disponible): " + e.getMessage());
-            // Si Gson no está disponible, escribir JSON simple
-            try {
-                String jsonSimple = crearJsonSimple(meta);
-                Files.write(indexRootPath.resolve(INDEX_PROPERTIES).resolve(META_FILE), 
-                           jsonSimple.getBytes(StandardCharsets.UTF_8));
-                Files.write(indexRootPath.resolve(INDEX_HOSTS).resolve(META_FILE), 
-                           jsonSimple.getBytes(StandardCharsets.UTF_8));
-                logger.info("Metadatos generados (formato simple)");
-            } catch (Exception e2) {
-                logger.error("Error generando metadatos: " + e2.getMessage());
-            }
-        }
-    }
-
-    /**
-     * Crea JSON simple sin Gson (fallback)
-     */
-    private String crearJsonSimple(Map<String, Object> meta) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{\n");
-        sb.append("  \"fecha\": \"").append(meta.get("fecha")).append("\",\n");
-        sb.append("  \"version\": \"").append(meta.get("version")).append("\",\n");
-        sb.append("  \"propiedades\": ").append(totalPropiedades.get()).append(",\n");
-        sb.append("  \"hosts\": ").append(totalHosts.get()).append(",\n");
-        sb.append("  \"errores\": ").append(errores.get()).append("\n");
-        sb.append("}\n");
-        return sb.toString();
-    }
 
     // ===================== Utilidades =====================
 

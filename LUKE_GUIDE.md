@@ -275,17 +275,46 @@ description:(pool OR jacuzzi)
 ```
 
 ### 3. Buscar por Ubicación (Neighbourhood)
+
+**⚠️ Importante:** `neighbourhood_cleansed` es un `StringField` normalizado a lowercase. **NO uses comillas** (produce error).
+
 ```
-neighbourhood_cleansed:Hollywood
-neighbourhood_cleansed:"Santa Monica"
-neighbourhood_cleansed:(Hollywood OR Venice)
+neighbourhood_cleansed:hollywood
+neighbourhood_cleansed:santa\ monica
+neighbourhood_cleansed:(hollywood OR venice)
 ```
 
+**Nota:** Si hay espacios, puedes escapar con `\`. Los valores están en lowercase.
+
 ### 4. Buscar por Tipo de Propiedad
+
+**⚠️ Importante:** `property_type` es un `StringField` normalizado a lowercase. **NO uses comillas** (produce error).
+
+**⚠️ Problema con "/":** El carácter "/" en "entire home/apt" es interpretado como parte de una query de rango. Necesitas escaparlo.
+
+**Solución 1: Escapar el espacio y el slash:**
 ```
-property_type:"Entire home/apt"
-property_type:"Private room"
-property_type:"Entire home/apt" OR property_type:"Entire rental unit"
+property_type:entire\ home\/apt
+property_type:private\ room
+```
+
+**Solución 2: Verificar el valor exacto en Luke:**
+1. Ve a **Overview** en Luke
+2. Haz clic en el campo `property_type`
+3. Haz clic en "Show top terms" para ver los valores exactos indexados
+4. Usa el valor exacto que veas (ya escapado)
+
+**Solución 3: Usar wildcards (si necesitas buscar parcialmente):**
+```
+property_type:entire*
+property_type:*home*
+```
+
+**Ejemplos completos:**
+```
+property_type:entire\ home\/apt
+property_type:private\ room
+property_type:entire\ home\/apt OR property_type:entire\ rental\ unit
 ```
 
 ### 5. Buscar por Amenidades
@@ -360,10 +389,14 @@ amenity:pool AND neighbourhood_cleansed:Hollywood AND price:[100 TO 200] AND rev
 ```
 
 **Casa completa en Santa Monica o Venice, con wifi y parking**
+
+**⚠️ Importante:** `property_type` y `neighbourhood_cleansed` son `StringField` normalizados a lowercase. **NO uses comillas**. Necesitas escapar espacios y el carácter "/".
+
 ```
-property_type:"Entire home/apt" AND neighbourhood_cleansed:(Santa\ Monica OR Venice) AND amenity:wifi AND amenity:parking
+property_type:entire\ home\/apt AND neighbourhood_cleansed:(santa\ monica OR venice) AND amenity:wifi AND amenity:parking
 ```
-*Nota: Espacios en nombres deben escaparse con `\`*
+
+*Nota: Espacios y "/" deben escaparse con `\`. Los valores están en lowercase.*
 
 **Apartamento con 2+ habitaciones, 1+ baños, precio razonable**
 
@@ -532,6 +565,80 @@ name:beach AND review_scores_rating:[4.5 TO 5.0]^2
 2. Inspecciona un documento en **Documents** para ver los valores
 3. Prueba búsquedas más simples primero
 
+### Campos con 0 Términos en Luke
+
+**Problema:** Algunos campos muestran "Term count: 0" en la pestaña **Overview** de Luke.
+
+**Explicación:** Esto es **NORMAL** y **ESPERADO**. No significa que el campo esté vacío o mal indexado.
+
+**Campos que muestran 0 términos (y por qué):**
+
+#### 1. Campos Point (IntPoint, DoublePoint, LatLonPoint)
+Estos campos **NO generan términos** en el índice invertido tradicional. Se indexan usando estructuras de datos especiales (BKD trees) para búsquedas eficientes de rangos y geográficas.
+
+**Campos afectados:**
+- `id` (IntPoint) - 0 términos ✅ **NORMAL**
+- `price` (DoublePoint) - 0 términos ✅ **NORMAL**
+- `review_scores_rating` (DoublePoint) - 0 términos ✅ **NORMAL**
+- `number_of_reviews` (IntPoint) - 0 términos ✅ **NORMAL**
+- `bathrooms` (IntPoint) - 0 términos ✅ **NORMAL**
+- `bedrooms` (IntPoint) - 0 términos ✅ **NORMAL**
+- `location` (LatLonPoint) - 0 términos ✅ **NORMAL**
+
+**Cómo verificar que funcionan:**
+1. Ve a la pestaña **Documents** en Luke
+2. Selecciona un documento
+3. Verifica que los campos stored muestran los valores correctos
+4. Usa búsquedas por rango en código Java (funcionan perfectamente)
+
+#### 2. Campos StoredField solamente (no indexados)
+Estos campos solo almacenan valores, pero **NO se indexan** como términos.
+
+**Campos afectados:**
+- `latitude` (StoredField) - 0 términos ✅ **NORMAL**
+- `longitude` (StoredField) - 0 términos ✅ **NORMAL**
+- `property_type_original` (StoredField) - 0 términos ✅ **NORMAL**
+- `neighbourhood_cleansed_original` (StoredField) - 0 términos ✅ **NORMAL**
+- `host_response_time_original` (StoredField) - 0 términos ✅ **NORMAL**
+
+**Cómo verificar que funcionan:**
+1. Ve a la pestaña **Documents** en Luke
+2. Selecciona un documento
+3. Verifica que los campos stored muestran los valores correctos
+
+#### 3. Campos que SÍ tienen términos
+Estos campos generan términos en el índice invertido y aparecen con conteos > 0:
+
+- `host_id` (StringField) - ✅ Tiene términos
+- `description` (TextField) - ✅ Tiene términos
+- `name` (TextField) - ✅ Tiene términos
+- `amenity` (TextField multivaluado) - ✅ Tiene términos
+- `neighbourhood_cleansed` (StringField) - ✅ Tiene términos
+- `property_type` (StringField) - ✅ Tiene términos
+
+**Resumen:**
+- **0 términos** en campos Point o StoredField = ✅ **NORMAL, esperado**
+- **0 términos** en campos TextField/StringField = ⚠️ **Puede ser un problema** (verificar que los datos existen)
+
+**Nota importante:** Los campos Point (IntPoint, DoublePoint, LatLonPoint) están **correctamente indexados** aunque Luke muestre 0 términos. Las búsquedas por rango funcionan perfectamente en código Java.
+
+#### Verificar que `location` está indexado (aunque muestre 0 términos)
+
+El campo `location` (LatLonPoint) **siempre muestra 0 términos** en Luke, pero esto es normal. Para verificar que está correctamente indexado:
+
+1. **Ve a la pestaña Documents**
+2. **Selecciona varios documentos** (usa el slider o escribe números)
+3. **Verifica que los campos stored `latitude` y `longitude` tienen valores**:
+   - Si un documento tiene `latitude: 34.09625` y `longitude: -118.34605`, entonces `location` está indexado correctamente
+   - Si `latitude` y `longitude` están vacíos, entonces el documento no tiene coordenadas geográficas en el CSV
+
+**Nota:** Si `location` está vacío en muchos documentos, puede ser porque:
+- El CSV no tiene valores de `latitude`/`longitude` para esos documentos
+- El parsing del CSV está fallando (por ejemplo, si las comas dentro de comillas no se manejan correctamente)
+- Los valores no son numéricos válidos y `parseDouble()` devuelve `null`
+
+**Solución:** Verifica que el CSV tiene valores válidos en las columnas `latitude` y `longitude`, y que el parser CSV está manejando correctamente las comas dentro de campos con comillas.
+
 ### Búsqueda Numérica no Funciona
 
 **Problema:** Los campos numéricos (`IntPoint`, `DoublePoint`) requieren rangos.
@@ -567,11 +674,11 @@ neighbourhood_cleansed:"Santa Monica"    # ❌ ERROR
 property_type:"Entire home/apt"         # ❌ ERROR
 ```
 
-✅ **Usa el valor exacto** (sin comillas):
+✅ **Usa el valor exacto** (sin comillas, escapando espacios y caracteres especiales):
 ```
-neighbourhood_cleansed:Santa\ Monica     # ✅ Correcto (escapa espacios)
-neighbourhood_cleansed:"Santa Monica"   # ✅ Funciona si es exacto
-property_type:Entire\ home/apt          # ✅ Correcto (escapa espacios)
+neighbourhood_cleansed:santa\ monica     # ✅ Correcto (escapa espacios, lowercase)
+property_type:entire\ home\/apt         # ✅ Correcto (escapa espacio Y "/", lowercase)
+property_type:private\ room              # ✅ Correcto (escapa espacios)
 ```
 
 ✅ **O usa wildcards** (si necesitas buscar parcialmente):
@@ -598,9 +705,9 @@ neighbourhood_cleansed:Hollywood
 neighbourhood_cleansed:Santa\ Monica
 neighbourhood_cleansed:"Los Angeles"    # Si el valor tiene comillas
 
-# Buscar por tipo de propiedad exacto
-property_type:Entire\ home/apt
-property_type:Private\ room
+# Buscar por tipo de propiedad exacto (lowercase, escapando espacio Y "/")
+property_type:entire\ home\/apt
+property_type:private\ room
 
 # Buscar por host response time exacto
 host_response_time:within\ an\ hour
@@ -735,8 +842,8 @@ campo:valor^3                            # Triplica relevancia
 # Estos funcionan en Luke:
 amenity:pool                             # Con piscina
 bedrooms:[2 TO 3]                        # 2-3 habitaciones
-neighbourhood_cleansed:Hollywood         # En Hollywood
-property_type:"Entire home/apt"          # Casa completa
+neighbourhood_cleansed:hollywood         # En Hollywood (lowercase, sin comillas)
+property_type:entire home/apt            # Casa completa (lowercase, sin comillas)
 host_is_superhost:1                      # Superhost
 
 # Estos NO funcionan en Luke (usa código Java):
