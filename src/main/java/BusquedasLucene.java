@@ -1,10 +1,4 @@
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.core.KeywordTokenizer;
-import org.apache.lucene.analysis.core.LowerCaseFilter;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
-import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -14,7 +8,6 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
@@ -59,44 +52,13 @@ public class BusquedasLucene {
 
         BusquedasLucene busqueda = new BusquedasLucene(indexRoot);
         
-        Analyzer analyzer = crearAnalizador();
+        // Reutilizar el analizador del indexador para garantizar consistencia
+        Analyzer analyzer = AirbnbIndexador.crearAnalizador();
         
-        Similarity similarity = new ClassicSimilarity();
-        // ===================================
-        // Otras alternativas implementadas en Lucene
-        // Similarity similarity = new BM25Similarity(); // Valor por defecto en Lucene
-        // Similarity similarity = new LMDirichletSimilarity();
+        Similarity similarity = new BM25Similarity();
         
         // Búsqueda en el índice
         busqueda.indexSearch(analyzer, similarity);
-    }
-
-    /**
-     * Crea el analizador con la misma configuración que AirbnbIndexador
-     */
-    private static Analyzer crearAnalizador() {
-        Analyzer defaultAnalyzer = new StandardAnalyzer();
-        java.util.Map<String, Analyzer> perField = new java.util.HashMap<>();
-        
-        // Campos en inglés
-        perField.put("description", new EnglishAnalyzer());
-        perField.put("neighborhood_overview", new EnglishAnalyzer());
-        
-        // Analyzer personalizado para campos categóricos: keyword + lowercase
-        Analyzer lowercaseKeywordAnalyzer = new Analyzer() {
-            @Override
-            protected TokenStreamComponents createComponents(String fieldName) {
-                KeywordTokenizer tokenizer = new KeywordTokenizer();
-                TokenStream filter = new LowerCaseFilter(tokenizer);
-                return new TokenStreamComponents(tokenizer, filter);
-            }
-        };
-        
-        // Campos categóricos (keyword + lowercase para case-insensitive)
-        perField.put("neighbourhood_cleansed", lowercaseKeywordAnalyzer);
-        perField.put("property_type", lowercaseKeywordAnalyzer);
-        
-        return new PerFieldAnalyzerWrapper(defaultAnalyzer, perField);
     }
 
     // ====================================================

@@ -239,8 +239,9 @@ public class AirbnbIndexador {
 
     /**
      * Crea el analizador con configuración por campo
+     * Método público y estático para ser reutilizado en búsquedas
      */
-    private Analyzer crearAnalizador() {
+    public static Analyzer crearAnalizador() {
         Analyzer defaultAnalyzer = new StandardAnalyzer();
         Map<String, Analyzer> perField = new HashMap<>();
         
