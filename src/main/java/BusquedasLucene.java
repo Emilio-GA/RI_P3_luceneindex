@@ -7,7 +7,6 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
@@ -36,7 +35,8 @@ public class BusquedasLucene {
     private String indexPath;
 
     public BusquedasLucene(String indexRoot) {
-        this.indexPath = Paths.get(indexRoot, "index_properties").toString();
+        // Reutilizar método del indexador para garantizar consistencia
+        this.indexPath = AirbnbIndexador.getPropertiesIndexPath(indexRoot).toString();
     }
 
     public static void main(String[] args) {
@@ -52,10 +52,9 @@ public class BusquedasLucene {
 
         BusquedasLucene busqueda = new BusquedasLucene(indexRoot);
         
-        // Reutilizar el analizador del indexador para garantizar consistencia
+        // Reutilizar el analizador y similarity del indexador para garantizar consistencia
         Analyzer analyzer = AirbnbIndexador.crearAnalizador();
-        
-        Similarity similarity = new BM25Similarity();
+        Similarity similarity = AirbnbIndexador.crearSimilarity();
         
         // Búsqueda en el índice
         busqueda.indexSearch(analyzer, similarity);

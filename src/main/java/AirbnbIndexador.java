@@ -8,6 +8,8 @@ import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.*;
 import org.apache.lucene.facet.FacetField;
 import org.apache.lucene.index.*;
+import org.apache.lucene.search.similarities.BM25Similarity;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
@@ -68,8 +70,10 @@ public class AirbnbIndexador {
     private static final String DEFAULT_ID_FIELD = "id";
     private static final int DEFAULT_MAX_ERRORS = 100;
     private static final int COMMIT_INTERVAL = 5000;
-    private static final String INDEX_PROPERTIES = "index_properties";
-    private static final String INDEX_HOSTS = "index_hosts";
+    
+    // Constantes públicas para nombres de índices (reutilizables en búsquedas)
+    public static final String INDEX_PROPERTIES = "index_properties";
+    public static final String INDEX_HOSTS = "index_hosts";
 
     // Configuración de la aplicación
     private final Config config;
@@ -267,6 +271,33 @@ public class AirbnbIndexador {
         perField.put("host_response_time", lowercaseKeywordAnalyzer);
         
         return new PerFieldAnalyzerWrapper(defaultAnalyzer, perField);
+    }
+
+    /**
+     * Obtiene la ruta completa del índice de propiedades
+     * @param indexRoot Directorio raíz donde están los índices
+     * @return Path al índice de propiedades
+     */
+    public static Path getPropertiesIndexPath(String indexRoot) {
+        return Paths.get(indexRoot, INDEX_PROPERTIES);
+    }
+
+    /**
+     * Obtiene la ruta completa del índice de hosts
+     * @param indexRoot Directorio raíz donde están los índices
+     * @return Path al índice de hosts
+     */
+    public static Path getHostsIndexPath(String indexRoot) {
+        return Paths.get(indexRoot, INDEX_HOSTS);
+    }
+
+    /**
+     * Crea y devuelve la Similarity por defecto (BM25Similarity)
+     * Para garantizar consistencia entre indexación y búsqueda
+     * @return Similarity configurada
+     */
+    public static Similarity crearSimilarity() {
+        return new BM25Similarity();
     }
 
     /**
