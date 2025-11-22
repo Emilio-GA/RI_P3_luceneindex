@@ -7,8 +7,8 @@
   <artifactId>airbnb-indexer</artifactId>
   <version>1.0</version>
   <properties>
-    <maven.compiler.source>11</maven.compiler.source>
-    <maven.compiler.target>11</maven.compiler.target>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <lucene.version>10.3.1</lucene.version>
   </properties>
@@ -34,6 +34,13 @@
       <artifactId>lucene-facet</artifactId>
       <version>${lucene.version}</version>
     </dependency>
+    
+    <!-- Lucene QueryParser (para QueryParser y MultiFieldQueryParser) -->
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
   </dependencies>
 
   <build>
@@ -41,10 +48,20 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.8.1</version>
+        <version>3.11.0</version>
         <configuration>
-          <source>${maven.compiler.source}</source>
-          <target>${maven.compiler.target}</target>
+          <release>21</release>
+        </configuration>
+      </plugin>
+
+      <!-- Exec plugin para ejecutar BusquedasLucene -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.1.0</version>
+        <configuration>
+          <mainClass>BusquedasLucene</mainClass>
+          <classpathScope>compile</classpathScope>
         </configuration>
       </plugin>
 
