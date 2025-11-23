@@ -672,6 +672,68 @@ public class BusquedasLucene {
     }
 
     /**
+     * ⚠️ ADVERTENCIA IMPORTANTE SOBRE OPERADORES LÓGICOS EN BooleanQuery ⚠️
+     * 
+     * El profesor advierte: "tener cuidado con los operadores lógicos, mirar cada una 
+     * con detalle ya que puede cambiar cosas depende de como se escriba"
+     * 
+     * CASOS PROBLEMÁTICOS QUE PUEDEN DAR RESULTADOS INESPERADOS:
+     * 
+     * 1. MUST_NOT SIN MUST/SHOULD (MÁS CRÍTICO):
+     *    - Si solo hay cláusulas MUST_NOT sin ninguna MUST o SHOULD, el comportamiento
+     *      puede ser impredecible:
+     *      * En algunas versiones de Lucene: devuelve TODOS los documentos
+     *      * En otras: devuelve NINGUNO
+     *    - Ejemplo problemático:
+     *        BooleanQuery con solo: property_type MUST_NOT "Entire home"
+     *        → Puede devolver todos los documentos o ninguno (comportamiento ambiguo)
+     *    - SOLUCIÓN: Siempre incluir al menos una cláusula MUST o SHOULD cuando uses MUST_NOT
+     * 
+     * 2. SHOULD SIN MUST (COMPORTAMIENTO AMBIGUO):
+     *    - Si solo hay cláusulas SHOULD sin ninguna MUST:
+     *      * Por defecto: al menos UNA cláusula SHOULD debe cumplirse
+     *      * Pero esto puede cambiar según la configuración de minimumShouldMatch
+     *    - Ejemplo problemático:
+     *        BooleanQuery con solo: name SHOULD "beach" OR description SHOULD "pool"
+     *        → Puede devolver documentos que cumplan solo una condición, ambas, o ninguno
+     *          dependiendo de la configuración
+     *    - SOLUCIÓN: Si quieres comportamiento OR estricto, usa múltiples SHOULD explícitos
+     * 
+     * 3. ORDEN DE LAS CLÁUSULAS (AFECTA SCORING):
+     *    - Aunque el orden NO debería afectar qué documentos se devuelven, SÍ afecta el SCORE
+     *    - Ejemplo:
+     *        Query 1: (name:beach MUST) AND (description:pool MUST)
+     *        Query 2: (description:pool MUST) AND (name:beach MUST)
+     *      → Mismos documentos, pero scores diferentes
+     * 
+     * 4. INTERPRETACIÓN DE "AND" vs "OR" EN QUERIES TEXTUALES:
+     *    - Si parseas "beach AND pool" con QueryParser:
+     *      → Crea una BooleanQuery con ambas cláusulas como MUST
+     *    - Si parseas "beach OR pool":
+     *      → Crea una BooleanQuery con ambas cláusulas como SHOULD
+     *    - Si luego agregas esta query a otra BooleanQuery, el comportamiento puede cambiar
+     *    - Ejemplo problemático:
+     *        QueryParser.parse("beach AND pool") → BooleanQuery con 2 MUST
+     *        Si luego haces: builder.add(esaQuery, BooleanClause.Occur.SHOULD)
+     *        → Ahora tienes un SHOULD que contiene 2 MUST internos (comportamiento complejo)
+     *    - NOTA: En este proyecto, siempre se especifican los operadores explícitamente
+     *      (MUST, MUST_NOT, SHOULD) al agregar queries, por lo que este caso NO aplica
+     *      en la mayoría de los métodos. Solo aplicaría si el usuario ingresa queries
+     *      complejas con AND/OR en QueryParser y luego se agregan a otra BooleanQuery.
+     * 
+     * 5. MUST_NOT CON QUERIES VACÍAS O SIN RESULTADOS:
+     *    - Si la query en MUST_NOT no encuentra nada, puede afectar el resultado final
+     *    - Ejemplo: property_type MUST_NOT "ValorQueNoExiste"
+     *      → La exclusión no tiene efecto, pero puede cambiar el scoring
+     * 
+     * REGLAS DE ORO:
+     * - ✅ SIEMPRE incluir al menos un MUST o SHOULD cuando uses MUST_NOT
+     * - ✅ Si solo usas SHOULD, entiende que requiere al menos uno por defecto
+     * - ✅ Evita anidar BooleanQueries complejas dentro de otras
+     * - ✅ Prueba tus queries con casos límite (valores que no existen, queries vacías, etc.)
+     */
+
+    /**
      * 3.1: BooleanQuery combinando consulta numérica y textual
      * Ejemplo: review_scores_rating >= 4.7 AND amenity "pool"
      */
@@ -802,11 +864,16 @@ public class BusquedasLucene {
         }
         
         // Crear query textual con MUST_NOT (excluir estos documentos)
+        // ⚠️ IMPORTANTE: Este método SIEMPRE incluye un MUST después del MUST_NOT
+        // para evitar el problema de "MUST_NOT sin MUST/SHOULD" que puede devolver
+        // resultados inesperados (todos los documentos o ninguno)
         QueryParser parser = new QueryParser(campoTexto.trim(), analyzer);
         Query queryTexto = parser.parse(valorTexto.trim());
         builder.add(queryTexto, BooleanClause.Occur.MUST_NOT);
         
         // 2. Query numérica con MUST (incluir estos documentos)
+        // ✅ Esta cláusula MUST es CRÍTICA: sin ella, el MUST_NOT anterior podría
+        //    causar comportamiento impredecible
         System.out.println();
         System.out.println("--- Consulta Numérica (MUST - debe cumplirse) ---");
         System.out.println("Campos disponibles: number_of_reviews, bedrooms, bathrooms");
@@ -915,11 +982,16 @@ public class BusquedasLucene {
         }
         
         // Crear query textual con SHOULD fijo
+        // ⚠️ IMPORTANTE: Cuando solo hay cláusulas SHOULD (sin MUST), Lucene requiere
+        // que al menos UNA se cumpla por defecto. Si ambas se cumplen, el score es mayor.
+        // Si ninguna se cumple, no se devuelve el documento.
         QueryParser parser = new QueryParser(campoTexto.trim(), analyzer);
         Query queryTexto = parser.parse(valorTexto.trim());
         builder.add(queryTexto, BooleanClause.Occur.SHOULD);
         
         // 2. Query numérica con SHOULD (ej: bedrooms)
+        // ⚠️ Comportamiento: Este método usa 2 SHOULD, por lo que devolverá documentos
+        // que cumplan al menos una condición (OR lógico), con mayor score si cumplen ambas
         System.out.println();
         System.out.println("--- Consulta Numérica (SHOULD) ---");
         System.out.println("Campos disponibles: number_of_reviews, bedrooms, bathrooms");
@@ -1802,215 +1874,6 @@ public class BusquedasLucene {
      * Query textual en múltiples campos
      * Ejemplo: "beach" busca en name, description y neighborhood_overview
      */
-    private Query crearQueryTextualMultiCampo(MultiFieldQueryParser parser, BufferedReader in) 
-            throws IOException, org.apache.lucene.queryparser.classic.ParseException {
-        System.out.print("Consulta multi-campo (ej: 'beach'): ");
-        String line = in.readLine();
-        if (line == null || line.trim().isEmpty()) return null;
-        return parser.parse(line.trim());
-    }
-
-    /**
-     * Query numérica exacta (búsqueda de un valor específico)
-     * Ejemplo: precio exacto = 150.0
-     */
-    private Query crearQueryNumericaExacta(BufferedReader in) throws IOException {
-        System.out.println("Búsqueda numérica exacta:");
-        System.out.print("Campo (price, review_scores_rating, bedrooms, bathrooms, number_of_reviews): ");
-        String campo = in.readLine();
-        if (campo == null || campo.trim().isEmpty()) return null;
-        
-        System.out.print("Valor exacto: ");
-        String valorStr = in.readLine();
-        if (valorStr == null || valorStr.trim().isEmpty()) return null;
-        
-        try {
-            double valor = Double.parseDouble(valorStr.trim());
-            
-            // Determinar si es IntPoint o DoublePoint basado en el campo
-            if (campo.equals("price") || campo.equals("review_scores_rating")) {
-                // DoublePoint: usar rango muy pequeño para búsqueda "exacta"
-                return DoublePoint.newRangeQuery(campo, valor, valor);
-            } else {
-                // IntPoint: usar rango muy pequeño para búsqueda "exacta"
-                int valorInt = (int) valor;
-                return IntPoint.newRangeQuery(campo, valorInt, valorInt);
-            }
-        } catch (NumberFormatException e) {
-            System.out.println("Error: valor numérico inválido");
-            return null;
-        }
-    }
-
-    /**
-     * Query numérica por rango
-     * Ejemplo: precio entre 100 y 200
-     */
-    private Query crearQueryNumericaRango(BufferedReader in) throws IOException {
-        System.out.println("Búsqueda numérica por rango:");
-        System.out.print("Campo (price, review_scores_rating, bedrooms, bathrooms, number_of_reviews): ");
-        String campo = in.readLine();
-        if (campo == null || campo.trim().isEmpty()) return null;
-        
-        System.out.print("Valor mínimo (o * para sin límite): ");
-        String minStr = in.readLine();
-        System.out.print("Valor máximo (o * para sin límite): ");
-        String maxStr = in.readLine();
-        
-        try {
-            if (campo.equals("price") || campo.equals("review_scores_rating")) {
-                // DoublePoint
-                double min = minStr == null || minStr.trim().equals("*") ? 
-                    Double.NEGATIVE_INFINITY : Double.parseDouble(minStr.trim());
-                double max = maxStr == null || maxStr.trim().equals("*") ? 
-                    Double.POSITIVE_INFINITY : Double.parseDouble(maxStr.trim());
-                return DoublePoint.newRangeQuery(campo, min, max);
-            } else {
-                // IntPoint
-                int min = minStr == null || minStr.trim().equals("*") ? 
-                    Integer.MIN_VALUE : Integer.parseInt(minStr.trim());
-                int max = maxStr == null || maxStr.trim().equals("*") ? 
-                    Integer.MAX_VALUE : Integer.parseInt(maxStr.trim());
-                return IntPoint.newRangeQuery(campo, min, max);
-            }
-        } catch (NumberFormatException e) {
-            System.out.println("Error: valor numérico inválido");
-            return null;
-        }
-    }
-
-    /**
-     * BooleanQuery con configuración de MUST/SHOULD
-     * Ejemplo: (name:beach MUST) AND (description:pool SHOULD)
-     */
-    private Query crearBooleanQuery(Analyzer analyzer, BufferedReader in) 
-            throws IOException, org.apache.lucene.queryparser.classic.ParseException {
-        System.out.println("BooleanQuery - Configuración de cláusulas:");
-        System.out.println("Ejemplo: 'name:beach MUST' y 'description:pool SHOULD'");
-        System.out.print("Número de cláusulas: ");
-        String numStr = in.readLine();
-        int numClausulas = Integer.parseInt(numStr.trim());
-        
-        BooleanQuery.Builder builder = new BooleanQuery.Builder();
-        QueryParser parser = new QueryParser("description", analyzer);
-        
-        for (int i = 0; i < numClausulas; i++) {
-            System.out.print("Cláusula " + (i+1) + " (query): ");
-            String queryStr = in.readLine();
-            System.out.print("Tipo (MUST/SHOULD/MUST_NOT): ");
-            String tipo = in.readLine();
-            
-            Query query = parser.parse(queryStr.trim());
-            BooleanClause.Occur occur;
-            switch (tipo.trim().toUpperCase()) {
-                case "MUST":
-                    occur = BooleanClause.Occur.MUST;
-                    break;
-                case "SHOULD":
-                    occur = BooleanClause.Occur.SHOULD;
-                    break;
-                case "MUST_NOT":
-                    occur = BooleanClause.Occur.MUST_NOT;
-                    break;
-                default:
-                    occur = BooleanClause.Occur.SHOULD;
-            }
-            builder.add(query, occur);
-        }
-        
-        return builder.build();
-    }
-
-    /**
-     * Query geográfica usando LatLonPoint
-     * Ejemplo: propiedades dentro de 5km de (34.0522, -118.2437) - Los Angeles
-     */
-    private Query crearQueryGeografica(BufferedReader in) throws IOException {
-        System.out.println("Búsqueda geográfica:");
-        System.out.print("Latitud: ");
-        String latStr = in.readLine();
-        System.out.print("Longitud: ");
-        String lonStr = in.readLine();
-        System.out.print("Radio en metros (ej: 5000 para 5km): ");
-        String radioStr = in.readLine();
-        
-        try {
-            double lat = Double.parseDouble(latStr.trim());
-            double lon = Double.parseDouble(lonStr.trim());
-            double radioMetros = Double.parseDouble(radioStr.trim());
-            
-            return LatLonPoint.newDistanceQuery("location", lat, lon, radioMetros);
-        } catch (NumberFormatException e) {
-            System.out.println("Error: valor numérico inválido");
-            return null;
-        }
-    }
-
-    /**
-     * Crea un Sort para ordenar por un campo distinto al score
-     * Ejemplo: ordenar por review_scores_rating descendente
-     */
-    private Sort crearSort(BufferedReader in) throws IOException {
-        System.out.println("Ordenamiento:");
-        System.out.print("Campo (review_scores_rating, price, number_of_reviews, bedrooms): ");
-        String campo = in.readLine();
-        System.out.print("Orden (ASC/DESC): ");
-        String orden = in.readLine();
-        
-        boolean reverse = orden != null && orden.trim().toUpperCase().equals("DESC");
-        
-        // Determinar tipo de campo
-        SortField.Type type;
-        if (campo.equals("price") || campo.equals("review_scores_rating")) {
-            type = SortField.Type.DOUBLE;
-        } else {
-            type = SortField.Type.INT;
-        }
-        
-        return new Sort(new SortField(campo, type, reverse));
-    }
-
-    /**
-     * Query combinada: texto + numérica + geográfica
-     * Ejemplo: "Entire guesthouse" AND price:[100 TO 200] AND location within 5km
-     */
-    private Query crearQueryCombinada(Analyzer analyzer, BufferedReader in) 
-            throws IOException, org.apache.lucene.queryparser.classic.ParseException {
-        System.out.println("Query combinada:");
-        
-        BooleanQuery.Builder builder = new BooleanQuery.Builder();
-        QueryParser parser = new QueryParser("description", analyzer);
-        
-        // Query textual
-        System.out.print("Consulta textual (o Enter para omitir): ");
-        String texto = in.readLine();
-        if (texto != null && !texto.trim().isEmpty()) {
-            builder.add(parser.parse(texto.trim()), BooleanClause.Occur.MUST);
-        }
-        
-        // Query numérica por rango
-        System.out.print("¿Incluir filtro numérico? (s/n): ");
-        String incluirNum = in.readLine();
-        if (incluirNum != null && incluirNum.trim().toLowerCase().equals("s")) {
-            Query numQuery = crearQueryNumericaRango(in);
-            if (numQuery != null) {
-                builder.add(numQuery, BooleanClause.Occur.MUST);
-            }
-        }
-        
-        // Query geográfica
-        System.out.print("¿Incluir filtro geográfico? (s/n): ");
-        String incluirGeo = in.readLine();
-        if (incluirGeo != null && incluirGeo.trim().toLowerCase().equals("s")) {
-            Query geoQuery = crearQueryGeografica(in);
-            if (geoQuery != null) {
-                builder.add(geoQuery, BooleanClause.Occur.MUST);
-            }
-        }
-        
-        return builder.build();
-    }
-
     /**
      * Muestra los resultados de una búsqueda en el índice de propiedades
      */
