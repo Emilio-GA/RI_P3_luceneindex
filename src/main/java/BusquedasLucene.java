@@ -3,6 +3,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.LatLonPoint;
+import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.MultiReader;
@@ -13,6 +14,7 @@ import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
@@ -29,6 +31,11 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 /**
  * Clase básica de búsqueda Lucene para el índice de Airbnb
@@ -154,13 +161,13 @@ public class BusquedasLucene {
                             menuQueriesNumericas(analyzer, similarity, in);
                             break;
                         case "3":
-                            menuBooleanQueries(analyzer, in);
+                            menuBooleanQueries(analyzer, similarity, in);
                             break;
                         case "4":
                             menuQueriesOrdenadas(analyzer, similarity, in);
                             break;
                         case "5":
-                            menuQueriesGeograficas(in);
+                            menuQueriesGeograficas(analyzer, similarity, in);
                             break;
                         case "6":
                             menuQueriesMultiIndice(analyzer, similarity, in);
@@ -281,7 +288,7 @@ public class BusquedasLucene {
             return;
         }
 
-        // TODO: Implementar la lógica de búsqueda
+        // Lógica de búsqueda
         QueryParser parser = new QueryParser("amenity", analyzer);
         Query query = parser.parse(valor.trim());
         IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
@@ -309,7 +316,7 @@ public class BusquedasLucene {
             return;
         }
 
-        // TODO: Implementar la lógica de búsqueda
+        // Lógica de búsqueda
         QueryParser parser = new QueryParser("host_name", analyzer);
         Query query = parser.parse(valor.trim());
         IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
@@ -338,7 +345,7 @@ public class BusquedasLucene {
             return;
         }
 
-        // TODO: Implementar la lógica de búsqueda
+        // Lógica de búsqueda
         QueryParser parser = new QueryParser("host_about", analyzer);
         Query query = parser.parse(valor.trim());
         IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
@@ -363,7 +370,7 @@ public class BusquedasLucene {
             System.out.println("2.1. Búsqueda en campo 'price' (Properties) - operadores: =, >, >=, <, <=");
             System.out.println("2.2. Búsqueda por rango en campo 'price' (Properties) - formato MIN-MAX");
             System.out.println("2.3. Búsqueda exacta en campo 'host_is_superhost' (Hosts) - 0 o 1");
-            System.out.println("2.4. Búsqueda por rango en campo 'host_since' (Hosts) - formato MIN-MAX");
+            System.out.println("2.4. Búsqueda de hosts más antiguos que una fecha en 'host_since' (Hosts)");
             System.out.println("0. Volver al menú principal");
             System.out.print("Selecciona opción: ");
 
@@ -429,44 +436,34 @@ public class BusquedasLucene {
 
         try {
             String input = valorStr.trim();
+            // Usar helper para extraer el valor numérico
+            double precio = parseDoubleValue(input);
             Query query;
-            String operador = "";
-            double precio;
+            String operador;
             
-            // Detectar operador y extraer el valor
+            // Solo detectar operador para crear la query correcta
             if (input.startsWith(">=")) {
                 operador = ">=";
-                precio = Double.parseDouble(input.substring(2).trim());
-                // Precio mayor o igual: desde precio hasta Double.MAX_VALUE
                 query = DoublePoint.newRangeQuery("price", precio, Double.MAX_VALUE);
             } else if (input.startsWith("<=")) {
                 operador = "<=";
-                precio = Double.parseDouble(input.substring(2).trim());
-                // Precio menor o igual: desde 0 hasta precio
                 query = DoublePoint.newRangeQuery("price", 0.0, precio);
             } else if (input.startsWith(">")) {
                 operador = ">";
-                precio = Double.parseDouble(input.substring(1).trim());
                 // Precio mayor: desde precio+epsilon hasta Double.MAX_VALUE
-                // Usamos un pequeño incremento para excluir el valor exacto
                 double precioMin = precio + 0.01;
                 query = DoublePoint.newRangeQuery("price", precioMin, Double.MAX_VALUE);
             } else if (input.startsWith("<")) {
                 operador = "<";
-                precio = Double.parseDouble(input.substring(1).trim());
                 // Precio menor: desde 0 hasta precio-epsilon
-                // Usamos un pequeño decremento para excluir el valor exacto
                 double precioMax = precio - 0.01;
                 query = DoublePoint.newRangeQuery("price", 0.0, precioMax);
             } else if (input.startsWith("=")) {
                 operador = "=";
-                precio = Double.parseDouble(input.substring(1).trim());
-                // Precio exacto: rango de precio a precio
                 query = DoublePoint.newRangeQuery("price", precio, precio);
             } else {
                 // Sin operador explícito, asumir igualdad
                 operador = "=";
-                precio = Double.parseDouble(input);
                 query = DoublePoint.newRangeQuery("price", precio, precio);
             }
             
@@ -520,14 +517,14 @@ public class BusquedasLucene {
                 return;
             }
             
-            // TODO: Implementar la lógica de búsqueda
-            // Query query = DoublePoint.newRangeQuery("price", min, max);
-            // IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
-            // IndexSearcher searcher = new IndexSearcher(reader);
-            // searcher.setSimilarity(similarity);
-            // TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA);
-            // mostrarResultados(searcher, hits);
-            // reader.close();
+            // Lógica de búsqueda
+            Query query = DoublePoint.newRangeQuery("price", min, max);
+            IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+            IndexSearcher searcher = new IndexSearcher(reader);
+            searcher.setSimilarity(similarity);
+            TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA);
+            mostrarResultados(searcher, hits);
+            reader.close();
             
         System.out.println("Búsqueda implementada para rango de precio: $" + min + " - $" + max);
         System.out.println("Índice: Properties");
@@ -544,7 +541,7 @@ public class BusquedasLucene {
     private void ejecutarQuerySuperhostExacto(Analyzer analyzer, Similarity similarity, BufferedReader in) 
             throws IOException {
         System.out.println("\n=== 2.3: Búsqueda exacta en 'host_is_superhost' (Hosts) ===");
-        System.out.print("Ingrese el valor (0 = no superhost, 1 = superhost): ");
+        System.out.print("Ingrese el valor (0/no = no superhost, 1/si = superhost): ");
         String valorStr = in.readLine();
         
         if (valorStr == null || valorStr.trim().isEmpty()) {
@@ -552,78 +549,75 @@ public class BusquedasLucene {
             return;
         }
 
-        try {
-            int valor = Integer.parseInt(valorStr.trim());
-            if (valor != 0 && valor != 1) {
-                System.out.println("Error: el valor debe ser 0 o 1.");
-                return;
-            }
-            
-            // TODO: Implementar la lógica de búsqueda
-            // Query query = IntPoint.newRangeQuery("host_is_superhost", valor, valor);
-            // IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
-            // IndexSearcher searcher = new IndexSearcher(reader);
-            // searcher.setSimilarity(similarity);
-            // TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA);
-            // mostrarResultadosHosts(searcher, hits);
-            // reader.close();
-            
-            System.out.println("Búsqueda implementada para host_is_superhost: " + valor + 
-                (valor == 1 ? " (superhost)" : " (no superhost)"));
-            System.out.println("Índice: Hosts");
-            System.out.println("Campo: host_is_superhost");
-        } catch (NumberFormatException e) {
-            System.out.println("Error: debe ingresar un número entero válido (0 o 1).");
+        int valor;
+        String valorNormalizado = valorStr.trim().toLowerCase();
+        
+        // Aceptar "si", "no", "1" o "0"
+        if (valorNormalizado.equals("si") || valorNormalizado.equals("1")) {
+            valor = 1;
+        } else if (valorNormalizado.equals("no") || valorNormalizado.equals("0")) {
+            valor = 0;
+        } else {
+            System.out.println("Error: el valor debe ser 0, 1, 'si' o 'no'.");
+            return;
         }
+        
+        // Lógica de búsqueda
+        Query query = IntPoint.newRangeQuery("host_is_superhost", valor, valor);
+        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
+        IndexSearcher searcher = new IndexSearcher(reader);
+        searcher.setSimilarity(similarity);
+        TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA);
+        mostrarResultadosHosts(searcher, hits);
+        reader.close();
+        
+        System.out.println("Búsqueda implementada para host_is_superhost: " + valor + 
+            (valor == 1 ? " (superhost)" : " (no superhost)"));
+        System.out.println("Índice: Hosts");
+        System.out.println("Campo: host_is_superhost");
     }
 
     /**
-     * 2.4: Búsqueda por rango en campo 'host_since' en índice de Hosts
-     * Formato de entrada: "MIN-MAX" donde MIN y MAX son timestamps en epoch millis
-     * Ejemplo: "1199145600000-1609459200000" (2008-01-01 a 2020-12-31)
+     * 2.4: Búsqueda de hosts más antiguos que una fecha en campo 'host_since'
+     * Formato de entrada: "YYYY-MM-DD" (ej: "2015-01-01")
+     * Busca hosts con host_since < fecha_ingresada
      */
     private void ejecutarQueryHostSinceRango(Analyzer analyzer, Similarity similarity, BufferedReader in) 
             throws IOException {
-        System.out.println("\n=== 2.4: Búsqueda por rango en 'host_since' (Hosts) ===");
-        System.out.println("Nota: host_since está almacenado como epoch millis (LongPoint)");
-        System.out.println("      Ingrese timestamps en formato MIN-MAX (ej: 1199145600000-1609459200000)");
-        System.out.print("Ingrese el rango en formato MIN-MAX: ");
-        String rangoStr = in.readLine();
+        System.out.println("\n=== 2.4: Búsqueda de hosts más antiguos que una fecha (Hosts) ===");
+        System.out.println("Formato: YYYY-MM-DD");
+        System.out.println("Ejemplo: 2015-01-01");
+        System.out.println("Nota: Busca hosts con host_since anterior a la fecha ingresada");
+        System.out.print("Ingrese la fecha: ");
+        String fechaStr = in.readLine();
         
-        if (rangoStr == null || rangoStr.trim().isEmpty()) {
+        if (fechaStr == null || fechaStr.trim().isEmpty()) {
             System.out.println("Valor vacío. Cancelando búsqueda.");
             return;
         }
 
         try {
-            String[] partes = rangoStr.trim().split("-");
-            if (partes.length != 2) {
-                System.out.println("Error: formato incorrecto. Use MIN-MAX (ej: 1199145600000-1609459200000)");
-                return;
-            }
+            String trimmed = fechaStr.trim();
+            long fechaLimite = parseDate(trimmed);
             
-            long min = Long.parseLong(partes[0].trim());
-            long max = Long.parseLong(partes[1].trim());
+            // Buscar hosts con host_since < fechaLimite (más antiguos)
+            // Usamos Long.MIN_VALUE como mínimo para incluir todos los hosts posibles
+            // y fechaLimite-1 como máximo para excluir la fecha exacta (más antiguos que)
+            long fechaLimiteExclusiva = fechaLimite - 1;
+            Query query = LongPoint.newRangeQuery("host_since", Long.MIN_VALUE, fechaLimiteExclusiva);
             
-            if (min > max) {
-                System.out.println("Error: el valor mínimo no puede ser mayor que el máximo.");
-                return;
-            }
+            IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
+            IndexSearcher searcher = new IndexSearcher(reader);
+            searcher.setSimilarity(similarity);
+            TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA);
+            mostrarResultadosHosts(searcher, hits);
+            reader.close();
             
-            // TODO: Implementar la lógica de búsqueda
-            // Query query = LongPoint.newRangeQuery("host_since", min, max);
-            // IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
-            // IndexSearcher searcher = new IndexSearcher(reader);
-            // searcher.setSimilarity(similarity);
-            // TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA);
-            // mostrarResultadosHosts(searcher, hits);
-            // reader.close();
-            
-            System.out.println("Búsqueda implementada para rango de host_since: " + min + " - " + max);
+            System.out.println("Búsqueda implementada para hosts más antiguos que: " + trimmed);
             System.out.println("Índice: Hosts");
             System.out.println("Campo: host_since");
-        } catch (NumberFormatException e) {
-            System.out.println("Error: los valores MIN y MAX deben ser números válidos (timestamps en epoch millis).");
+        } catch (DateTimeParseException e) {
+            System.out.println("Error: formato de fecha inválido. Use YYYY-MM-DD (ej: 2015-01-01)");
         } catch (Exception e) {
             System.out.println("Error: " + e.getMessage());
         }
@@ -632,10 +626,578 @@ public class BusquedasLucene {
     /**
      * Menú para BooleanQueries
      */
-    private void menuBooleanQueries(Analyzer analyzer, BufferedReader in) throws IOException {
-        System.out.println("\n=== 3. BOOLEANQUERIES ===");
-        System.out.println("Funcionalidad pendiente de implementar");
-        // TODO: Implementar submenú con opciones para BooleanQueries con distintos campos y BooleanClause
+    private void menuBooleanQueries(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException {
+        while (true) {
+            System.out.println("\n=== 3. BOOLEANQUERIES ===");
+            System.out.println("3.1. BooleanQuery: numérica AND textual (ej: rating >= 4.7 AND amenity 'pool')");
+            System.out.println("3.2. BooleanQuery con MUST_NOT (ej: property_type MUST_NOT 'Entire home' AND number_of_reviews = 0)");
+            System.out.println("3.3. BooleanQuery con SHOULD (ej: neighbourhood_cleansed 'Hollywood' OR bedrooms >= 3)");
+            System.out.println("3.4. BooleanQuery avanzada: MUST + MUST_NOT + SHOULD (ej: property_type MUST, price MUST_NOT, description SHOULD)");
+            System.out.println("0. Volver al menú principal");
+            System.out.print("Selecciona opción: ");
+
+            String subOption = in.readLine();
+            if (subOption == null || subOption.trim().isEmpty() || "0".equals(subOption.trim())) {
+                break;
+            }
+
+            try {
+                switch (subOption.trim()) {
+                    case "3.1":
+                    case "1":
+                        ejecutarBooleanQueryCombinada(analyzer, similarity, in);
+                        break;
+                    case "3.2":
+                    case "2":
+                        ejecutarBooleanQueryConMustNot(analyzer, similarity, in);
+                        break;
+                    case "3.3":
+                    case "3":
+                        ejecutarBooleanQueryConShould(analyzer, similarity, in);
+                        break;
+                    case "3.4":
+                    case "4":
+                        ejecutarBooleanQueryAvanzada(analyzer, similarity, in);
+                        break;
+                    default:
+                        System.out.println("Opción no válida.");
+                        continue;
+                }
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * 3.1: BooleanQuery combinando consulta numérica y textual
+     * Ejemplo: review_scores_rating >= 4.7 AND amenity "pool"
+     */
+    private void ejecutarBooleanQueryCombinada(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException, ParseException {
+        System.out.println("\n=== 3.1: BooleanQuery Combinada ===");
+        System.out.println("Ejemplo: review_scores_rating >= 4.7 AND amenity 'pool'");
+        System.out.println();
+        
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        
+        // 1. Query numérica (similar a 2.1 pero para cualquier campo DoublePoint)
+        System.out.println("--- Consulta Numérica ---");
+        System.out.println("Campos disponibles: price, review_scores_rating");
+        System.out.println("Formatos aceptados: >=4.7, >4.7, <4.7, <=4.7, =4.7, 4.7");
+        System.out.print("Campo numérico: ");
+        String campoNumerico = in.readLine();
+        if (campoNumerico == null || campoNumerico.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        System.out.print("Operador y valor (ej: >=4.7): ");
+        String valorStr = in.readLine();
+        if (valorStr == null || valorStr.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query numérica usando helper function
+        Query queryNumerica = null;
+        try {
+            double valor = parseDoubleValue(valorStr.trim());
+            String input = valorStr.trim();
+            
+            if (input.startsWith(">=")) {
+                queryNumerica = DoublePoint.newRangeQuery(campoNumerico.trim(), valor, Double.MAX_VALUE);
+            } else if (input.startsWith("<=")) {
+                queryNumerica = DoublePoint.newRangeQuery(campoNumerico.trim(), 0.0, valor);
+            } else if (input.startsWith(">")) {
+                // Usamos un pequeño incremento para excluir el valor exacto
+                double min = valor + 0.01;
+                queryNumerica = DoublePoint.newRangeQuery(campoNumerico.trim(), min, Double.MAX_VALUE);
+            } else if (input.startsWith("<")) {
+                // Usamos un pequeño decremento para excluir el valor exacto
+                double max = valor - 0.01;
+                queryNumerica = DoublePoint.newRangeQuery(campoNumerico.trim(), 0.0, max);
+            } else if (input.startsWith("=")) {
+                queryNumerica = DoublePoint.newRangeQuery(campoNumerico.trim(), valor, valor);
+            } else {
+                // Sin operador explícito, asumir igualdad
+                queryNumerica = DoublePoint.newRangeQuery(campoNumerico.trim(), valor, valor);
+            }
+            builder.add(queryNumerica, BooleanClause.Occur.MUST);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: valor numérico inválido.");
+            System.out.println("Ejemplos válidos: 4.7, =4.7, >4.7, >=4.7, <4.7, <=4.7");
+            return;
+        }
+        
+        // 2. Query textual (similar a 1.2)
+        System.out.println();
+        System.out.println("--- Consulta Textual ---");
+        System.out.println("Campos disponibles: amenity, name, description, neighborhood_overview");
+        System.out.print("Campo textual: ");
+        String campoTexto = in.readLine();
+        if (campoTexto == null || campoTexto.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        System.out.print("Valor a buscar (ej: pool): ");
+        String valorTexto = in.readLine();
+        if (valorTexto == null || valorTexto.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query textual (lógica de 1.2)
+        QueryParser parser = new QueryParser(campoTexto.trim(), analyzer);
+        Query queryTexto = parser.parse(valorTexto.trim());
+        builder.add(queryTexto, BooleanClause.Occur.MUST);
+        
+        // Ejecutar búsqueda combinada
+        Query combinedQuery = builder.build();
+        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+        IndexSearcher searcher = new IndexSearcher(reader);
+        searcher.setSimilarity(similarity);
+        TopDocs hits = searcher.search(combinedQuery, MAX_RESULTADOS_BUSQUEDA);
+        mostrarResultados(searcher, hits);
+        reader.close();
+        
+        System.out.println();
+        System.out.println("=== Búsqueda Implementada ===");
+        System.out.println("Query combinada:");
+        System.out.println("  " + campoNumerico.trim() + " " + valorStr.trim() + " (MUST)");
+        System.out.println("  " + campoTexto.trim() + ":" + valorTexto.trim() + " (MUST)");
+        System.out.println("Índice: Properties");
+    }
+
+    /**
+     * 3.2: BooleanQuery con MUST_NOT
+     * Ejemplo: property_type MUST_NOT "Entire home" AND number_of_reviews = 0
+     */
+    private void ejecutarBooleanQueryConMustNot(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException, ParseException {
+        System.out.println("\n=== 3.2: BooleanQuery con MUST_NOT ===");
+        System.out.println("Ejemplo: property_type MUST_NOT 'Entire home' AND number_of_reviews = 0");
+        System.out.println();
+        
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        
+        // 1. Query textual con MUST_NOT (ej: property_type)
+        System.out.println("--- Consulta Textual (MUST_NOT) ---");
+        System.out.println("Campos disponibles: property_type, amenity, name, description, neighborhood_overview");
+        System.out.print("Campo textual: ");
+        String campoTexto = in.readLine();
+        if (campoTexto == null || campoTexto.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        System.out.print("Valor a buscar (ej: Entire home): ");
+        String valorTexto = in.readLine();
+        if (valorTexto == null || valorTexto.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query textual con MUST_NOT (excluir estos documentos)
+        QueryParser parser = new QueryParser(campoTexto.trim(), analyzer);
+        Query queryTexto = parser.parse(valorTexto.trim());
+        builder.add(queryTexto, BooleanClause.Occur.MUST_NOT);
+        
+        // 2. Query numérica con MUST (incluir estos documentos)
+        System.out.println();
+        System.out.println("--- Consulta Numérica (MUST - debe cumplirse) ---");
+        System.out.println("Campos disponibles: number_of_reviews, bedrooms, bathrooms");
+        System.out.println("Formatos aceptados: >=0, >0, <0, <=0, =0, 0");
+        System.out.print("Campo numérico: ");
+        String campoNumerico = in.readLine();
+        if (campoNumerico == null || campoNumerico.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        // Validar que el campo sea uno de los permitidos
+        if (!campoNumerico.trim().equals("number_of_reviews") && 
+            !campoNumerico.trim().equals("bedrooms") && 
+            !campoNumerico.trim().equals("bathrooms")) {
+            System.out.println("Error: campo no válido. Solo se permiten: number_of_reviews, bedrooms, bathrooms");
+            return;
+        }
+        
+        System.out.print("Operador y valor (ej: =0 para exacto): ");
+        String valorStr = in.readLine();
+        if (valorStr == null || valorStr.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query numérica usando helper function (IntPoint)
+        Query queryNumerica = null;
+        try {
+            String input = valorStr.trim();
+            // Usar helper para parsear el valor (devuelve double)
+            double valorDouble = parseDoubleValue(input);
+            // Convertir a int
+            int valor = (int) valorDouble;
+            
+            // Solo detectar operador para crear la query correcta
+            if (input.startsWith(">=")) {
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), valor, Integer.MAX_VALUE);
+            } else if (input.startsWith("<=")) {
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), Integer.MIN_VALUE, valor);
+            } else if (input.startsWith(">")) {
+                // Excluir el valor exacto
+                int min = valor + 1;
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), min, Integer.MAX_VALUE);
+            } else if (input.startsWith("<")) {
+                // Excluir el valor exacto
+                int max = valor - 1;
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), Integer.MIN_VALUE, max);
+            } else if (input.startsWith("=")) {
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), valor, valor);
+            } else {
+                // Sin operador explícito, asumir igualdad
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), valor, valor);
+            }
+            builder.add(queryNumerica, BooleanClause.Occur.MUST);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: valor numérico inválido.");
+            System.out.println("Ejemplos válidos: 0, =0, >0, >=0, <0, <=0");
+            return;
+        }
+        
+        // Ejecutar búsqueda combinada
+        Query combinedQuery = builder.build();
+        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+        IndexSearcher searcher = new IndexSearcher(reader);
+        searcher.setSimilarity(similarity);
+        TopDocs hits = searcher.search(combinedQuery, MAX_RESULTADOS_BUSQUEDA);
+        mostrarResultados(searcher, hits);
+        reader.close();
+        
+        System.out.println();
+        System.out.println("=== Búsqueda Implementada ===");
+        System.out.println("Query combinada:");
+        System.out.println("  " + campoTexto.trim() + ":" + valorTexto.trim() + " (MUST_NOT - excluir)");
+        System.out.println("  " + campoNumerico.trim() + " " + valorStr.trim() + " (MUST - incluir)");
+        System.out.println("Índice: Properties");
+    }
+
+    /**
+     * 3.3: BooleanQuery con SHOULD
+     * Ejemplo: neighbourhood_cleansed SHOULD "Hollywood" OR bedrooms SHOULD >= 3
+     */
+    private void ejecutarBooleanQueryConShould(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException, ParseException {
+        System.out.println("\n=== 3.3: BooleanQuery con SHOULD ===");
+        System.out.println("Ejemplo: neighbourhood_cleansed 'Hollywood' OR bedrooms >= 3");
+        System.out.println();
+        
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        
+        // 1. Query textual con SHOULD (ej: neighbourhood_cleansed)
+        System.out.println("--- Consulta Textual (SHOULD) ---");
+        System.out.println("Campos disponibles: neighbourhood_cleansed, property_type, amenity, name, description");
+        System.out.print("Campo textual: ");
+        String campoTexto = in.readLine();
+        if (campoTexto == null || campoTexto.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        System.out.print("Valor a buscar (ej: Hollywood): ");
+        String valorTexto = in.readLine();
+        if (valorTexto == null || valorTexto.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query textual con SHOULD fijo
+        QueryParser parser = new QueryParser(campoTexto.trim(), analyzer);
+        Query queryTexto = parser.parse(valorTexto.trim());
+        builder.add(queryTexto, BooleanClause.Occur.SHOULD);
+        
+        // 2. Query numérica con SHOULD (ej: bedrooms)
+        System.out.println();
+        System.out.println("--- Consulta Numérica (SHOULD) ---");
+        System.out.println("Campos disponibles: number_of_reviews, bedrooms, bathrooms");
+        System.out.println("Formatos aceptados: >=3, >3, <3, <=3, =3, 3");
+        System.out.print("Campo numérico: ");
+        String campoNumerico = in.readLine();
+        if (campoNumerico == null || campoNumerico.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        // Validar que el campo sea uno de los permitidos
+        if (!campoNumerico.trim().equals("number_of_reviews") && 
+            !campoNumerico.trim().equals("bedrooms") && 
+            !campoNumerico.trim().equals("bathrooms")) {
+            System.out.println("Error: campo no válido. Solo se permiten: number_of_reviews, bedrooms, bathrooms");
+            return;
+        }
+        
+        System.out.print("Operador y valor (ej: >=3): ");
+        String valorStr = in.readLine();
+        if (valorStr == null || valorStr.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query numérica usando helper function (IntPoint)
+        Query queryNumerica = null;
+        try {
+            String input = valorStr.trim();
+            // Usar helper para parsear el valor (devuelve double)
+            double valorDouble = parseDoubleValue(input);
+            // Convertir a int
+            int valor = (int) valorDouble;
+            
+            // Solo detectar operador para crear la query correcta
+            if (input.startsWith(">=")) {
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), valor, Integer.MAX_VALUE);
+            } else if (input.startsWith("<=")) {
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), Integer.MIN_VALUE, valor);
+            } else if (input.startsWith(">")) {
+                // Excluir el valor exacto
+                int min = valor + 1;
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), min, Integer.MAX_VALUE);
+            } else if (input.startsWith("<")) {
+                // Excluir el valor exacto
+                int max = valor - 1;
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), Integer.MIN_VALUE, max);
+            } else if (input.startsWith("=")) {
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), valor, valor);
+            } else {
+                // Sin operador explícito, asumir igualdad
+                queryNumerica = IntPoint.newRangeQuery(campoNumerico.trim(), valor, valor);
+            }
+            builder.add(queryNumerica, BooleanClause.Occur.SHOULD);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: valor numérico inválido.");
+            System.out.println("Ejemplos válidos: 3, =3, >3, >=3, <3, <=3");
+            return;
+        }
+        
+        // Ejecutar búsqueda combinada
+        Query combinedQuery = builder.build();
+        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+        IndexSearcher searcher = new IndexSearcher(reader);
+        searcher.setSimilarity(similarity);
+        TopDocs hits = searcher.search(combinedQuery, MAX_RESULTADOS_BUSQUEDA);
+        mostrarResultados(searcher, hits);
+        reader.close();
+        
+        System.out.println();
+        System.out.println("=== Búsqueda Implementada ===");
+        System.out.println("Query combinada:");
+        System.out.println("  " + campoTexto.trim() + ":" + valorTexto.trim() + " (SHOULD)");
+        System.out.println("  " + campoNumerico.trim() + " " + valorStr.trim() + " (SHOULD)");
+        System.out.println("Índice: Properties");
+    }
+
+    /**
+     * 3.4: BooleanQuery avanzada con MUST + MUST_NOT + SHOULD
+     * Ejemplo: property_type MUST "Entire guesthouse", price MUST_NOT >200, description SHOULD "terrace"
+     */
+    private void ejecutarBooleanQueryAvanzada(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException, ParseException {
+        System.out.println("\n=== 3.4: BooleanQuery Avanzada ===");
+        System.out.println("Ejemplo: property_type MUST 'Entire guesthouse', price MUST_NOT >200, description SHOULD 'terrace'");
+        System.out.println();
+        
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        
+        // 1. Query textual con MUST (ej: property_type)
+        System.out.println("--- Consulta Textual (MUST) ---");
+        System.out.println("Campos disponibles: property_type, neighbourhood_cleansed, amenity, name");
+        System.out.print("Campo textual: ");
+        String campoTextoMust = in.readLine();
+        if (campoTextoMust == null || campoTextoMust.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        System.out.print("Valor a buscar (ej: Entire guesthouse): ");
+        String valorTextoMust = in.readLine();
+        if (valorTextoMust == null || valorTextoMust.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query textual con MUST
+        QueryParser parserMust = new QueryParser(campoTextoMust.trim(), analyzer);
+        Query queryTextoMust = parserMust.parse(valorTextoMust.trim());
+        builder.add(queryTextoMust, BooleanClause.Occur.MUST);
+        
+        // 2. Query numérica con MUST_NOT (ej: price - DoublePoint)
+        System.out.println();
+        System.out.println("--- Consulta Numérica (MUST_NOT) ---");
+        System.out.println("Campos disponibles: price, review_scores_rating");
+        System.out.println("Formatos aceptados: >=200, >200, <200, <=200, =200, 200");
+        System.out.print("Campo numérico: ");
+        String campoNumericoMustNot = in.readLine();
+        if (campoNumericoMustNot == null || campoNumericoMustNot.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        // Validar que el campo sea DoublePoint
+        if (!campoNumericoMustNot.trim().equals("price") && 
+            !campoNumericoMustNot.trim().equals("review_scores_rating")) {
+            System.out.println("Error: campo no válido. Solo se permiten: price, review_scores_rating");
+            return;
+        }
+        
+        System.out.print("Operador y valor (ej: >200): ");
+        String valorStrMustNot = in.readLine();
+        if (valorStrMustNot == null || valorStrMustNot.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query numérica con MUST_NOT usando helper function (DoublePoint)
+        Query queryNumericaMustNot = null;
+        try {
+            String input = valorStrMustNot.trim();
+            double valor = parseDoubleValue(input);
+            
+            // Solo detectar operador para crear la query correcta
+            if (input.startsWith(">=")) {
+                queryNumericaMustNot = DoublePoint.newRangeQuery(campoNumericoMustNot.trim(), valor, Double.MAX_VALUE);
+            } else if (input.startsWith("<=")) {
+                queryNumericaMustNot = DoublePoint.newRangeQuery(campoNumericoMustNot.trim(), 0.0, valor);
+            } else if (input.startsWith(">")) {
+                // Excluir el valor exacto
+                double min = valor + 0.01;
+                queryNumericaMustNot = DoublePoint.newRangeQuery(campoNumericoMustNot.trim(), min, Double.MAX_VALUE);
+            } else if (input.startsWith("<")) {
+                // Excluir el valor exacto
+                double max = valor - 0.01;
+                queryNumericaMustNot = DoublePoint.newRangeQuery(campoNumericoMustNot.trim(), 0.0, max);
+            } else if (input.startsWith("=")) {
+                queryNumericaMustNot = DoublePoint.newRangeQuery(campoNumericoMustNot.trim(), valor, valor);
+            } else {
+                // Sin operador explícito, asumir igualdad
+                queryNumericaMustNot = DoublePoint.newRangeQuery(campoNumericoMustNot.trim(), valor, valor);
+            }
+            builder.add(queryNumericaMustNot, BooleanClause.Occur.MUST_NOT);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: valor numérico inválido.");
+            System.out.println("Ejemplos válidos: 200, =200, >200, >=200, <200, <=200");
+            return;
+        }
+        
+        // 3. Query textual con SHOULD (ej: description)
+        System.out.println();
+        System.out.println("--- Consulta Textual (SHOULD) ---");
+        System.out.println("Campos disponibles: description, neighborhood_overview, name");
+        System.out.print("Campo textual: ");
+        String campoTextoShould = in.readLine();
+        if (campoTextoShould == null || campoTextoShould.trim().isEmpty()) {
+            System.out.println("Campo requerido. Cancelando.");
+            return;
+        }
+        
+        System.out.print("Valor a buscar (ej: terrace): ");
+        String valorTextoShould = in.readLine();
+        if (valorTextoShould == null || valorTextoShould.trim().isEmpty()) {
+            System.out.println("Valor requerido. Cancelando.");
+            return;
+        }
+        
+        // Crear query textual con SHOULD
+        QueryParser parserShould = new QueryParser(campoTextoShould.trim(), analyzer);
+        Query queryTextoShould = parserShould.parse(valorTextoShould.trim());
+        builder.add(queryTextoShould, BooleanClause.Occur.SHOULD);
+        
+        // Ejecutar búsqueda combinada
+        Query combinedQuery = builder.build();
+        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+        IndexSearcher searcher = new IndexSearcher(reader);
+        searcher.setSimilarity(similarity);
+        TopDocs hits = searcher.search(combinedQuery, MAX_RESULTADOS_BUSQUEDA);
+        mostrarResultados(searcher, hits);
+        reader.close();
+        
+        System.out.println();
+        System.out.println("=== Búsqueda Implementada ===");
+        System.out.println("Query combinada:");
+        System.out.println("  " + campoTextoMust.trim() + ":" + valorTextoMust.trim() + " (MUST)");
+        System.out.println("  " + campoNumericoMustNot.trim() + " " + valorStrMustNot.trim() + " (MUST_NOT)");
+        System.out.println("  " + campoTextoShould.trim() + ":" + valorTextoShould.trim() + " (SHOULD)");
+        System.out.println("Índice: Properties");
+    }
+
+    /**
+     * Helper: Parsea un string numérico con operador y devuelve el valor double
+     * Soporta formatos: ">30.3", "<10", "10", "=100", ">=50.5", "<=20"
+     * 
+     * @param valorStr String con formato de operador y valor
+     * @return El valor numérico extraído como double
+     * @throws NumberFormatException Si el formato es inválido
+     */
+    private double parseDoubleValue(String valorStr) throws NumberFormatException {
+        String input = valorStr.trim();
+        
+        if (input.startsWith(">=")) {
+            return Double.parseDouble(input.substring(2).trim());
+        } else if (input.startsWith("<=")) {
+            return Double.parseDouble(input.substring(2).trim());
+        } else if (input.startsWith(">")) {
+            return Double.parseDouble(input.substring(1).trim());
+        } else if (input.startsWith("<")) {
+            return Double.parseDouble(input.substring(1).trim());
+        } else if (input.startsWith("=")) {
+            return Double.parseDouble(input.substring(1).trim());
+        } else {
+            // Sin operador explícito, asumir que es solo el número
+            return Double.parseDouble(input);
+        }
+    }
+
+    /**
+     * Helper: Convierte una fecha en formato YYYY-MM-DD a epoch millis
+     * Acepta: "2008-07-11"
+     */
+    private long parseDate(String input) throws DateTimeParseException {
+        String trimmed = input.trim();
+        LocalDate date = LocalDate.parse(trimmed, DateTimeFormatter.ISO_LOCAL_DATE);
+        return date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+
+    /**
+     * Helper: Formatea un timestamp (epoch millis) a fecha legible YYYY-MM-DD
+     */
+    private String formatTimestamp(long timestamp) {
+        try {
+            Instant instant = Instant.ofEpochMilli(timestamp);
+            LocalDate date = instant.atZone(ZoneId.systemDefault()).toLocalDate();
+            return date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (Exception e) {
+            return String.valueOf(timestamp);
+        }
+    }
+
+    /**
+     * Helper: Parsea el tipo de cláusula Boolean
+     */
+    private BooleanClause.Occur parseOccur(String tipo, BooleanClause.Occur defaultOccur) {
+        if (tipo == null || tipo.trim().isEmpty()) {
+            return defaultOccur;
+        }
+        switch (tipo.trim().toUpperCase()) {
+            case "MUST":
+                return BooleanClause.Occur.MUST;
+            case "SHOULD":
+                return BooleanClause.Occur.SHOULD;
+            case "MUST_NOT":
+                return BooleanClause.Occur.MUST_NOT;
+            default:
+                return defaultOccur;
+        }
     }
 
     /**
@@ -680,7 +1242,7 @@ public class BusquedasLucene {
      * 4.1: Consulta ordenada por 'number_of_reviews' (descendente) en Properties
      */
     private void ejecutarQueryOrdenadaPorReviews(Analyzer analyzer, Similarity similarity, BufferedReader in) 
-            throws IOException {
+            throws IOException, ParseException {
         System.out.println("\n=== 4.1: Ordenar por 'number_of_reviews' DESC (Properties) ===");
         System.out.println("Nota: Si ingresa una consulta, se buscará en el campo 'description' por defecto.");
         System.out.println("      Si deja la consulta vacía (Enter), se devolverán todos los documentos.");
@@ -689,22 +1251,23 @@ public class BusquedasLucene {
         
         Query query = null;
         if (consulta != null && !consulta.trim().isEmpty()) {
-            // TODO: Parsear la consulta si se proporciona
-            // QueryParser parser = new QueryParser("description", analyzer);
-            // query = parser.parse(consulta.trim());
+            // Parsear la consulta si se proporciona
+            QueryParser parser = new QueryParser("description", analyzer);
+            query = parser.parse(consulta.trim());
         } else {
-            // TODO: Crear query que devuelva todos los documentos
-            // query = new MatchAllDocsQuery();
+            // Que devuelva todos los documentos
+            query = new MatchAllDocsQuery();
         }
         
-        // TODO: Implementar la lógica de búsqueda con Sort
-        // Sort sort = new Sort(new SortField("number_of_reviews", SortField.Type.INT, true)); // true = descendente
-        // IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
-        // IndexSearcher searcher = new IndexSearcher(reader);
-        // searcher.setSimilarity(similarity);
-        // TopDocs hits = searcher.search(query, 100, sort);
-        // mostrarResultados(searcher, hits);
-        // reader.close();
+        // Logica de búsqueda con Sort
+        Sort sort = new Sort(new SortField("number_of_reviews", SortField.Type.INT, true)); // true = descendente
+        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+        IndexSearcher searcher = new IndexSearcher(reader);
+        searcher.setSimilarity(similarity);
+        // doDocScores=true para calcular scores incluso cuando se ordena por un campo
+        TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA, sort, true);
+        mostrarResultados(searcher, hits);
+        reader.close();
         
         System.out.println("\n=== CONFIGURACIÓN DE BÚSQUEDA ===");
         System.out.println("Índice: Properties");
@@ -721,7 +1284,7 @@ public class BusquedasLucene {
      * 4.2: Consulta ordenada por 'host_since' (más antiguo primero) en Hosts
      */
     private void ejecutarQueryOrdenadaPorHostSince(Analyzer analyzer, Similarity similarity, BufferedReader in) 
-            throws IOException {
+            throws IOException, ParseException {
         System.out.println("\n=== 4.2: Ordenar por 'host_since' ASC (Hosts) ===");
         System.out.println("Nota: Si ingresa una consulta, se buscará en el campo 'host_name' por defecto.");
         System.out.println("      Si deja la consulta vacía (Enter), se devolverán todos los documentos.");
@@ -730,22 +1293,23 @@ public class BusquedasLucene {
         
         Query query = null;
         if (consulta != null && !consulta.trim().isEmpty()) {
-            // TODO: Parsear la consulta si se proporciona
-            // QueryParser parser = new QueryParser("host_name", analyzer);
-            // query = parser.parse(consulta.trim());
+            // Parsear la consulta si se proporciona
+            QueryParser parser = new QueryParser("host_name", analyzer);
+            query = parser.parse(consulta.trim());
         } else {
-            // TODO: Crear query que devuelva todos los documentos
-            // query = new MatchAllDocsQuery();
+            // Crear query que devuelva todos los documentos
+            query = new MatchAllDocsQuery();
         }
         
-        // TODO: Implementar la lógica de búsqueda con Sort
-        // Sort sort = new Sort(new SortField("host_since", SortField.Type.LONG, false)); // false = ascendente (más antiguo primero)
-        // IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
-        // IndexSearcher searcher = new IndexSearcher(reader);
-        // searcher.setSimilarity(similarity);
-        // TopDocs hits = searcher.search(query, 100, sort);
-        // mostrarResultadosHosts(searcher, hits);
-        // reader.close();
+        // Lógica de búsqueda con Sort
+        Sort sort = new Sort(new SortField("host_since", SortField.Type.LONG, false)); // false = ascendente (más antiguo primero)
+        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathHosts)));
+        IndexSearcher searcher = new IndexSearcher(reader);
+        searcher.setSimilarity(similarity);
+        // doDocScores=true para calcular scores incluso cuando se ordena por un campo
+        TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA, sort, true);
+        mostrarResultadosHosts(searcher, hits);
+        reader.close();
         
         System.out.println("\n=== CONFIGURACIÓN DE BÚSQUEDA ===");
         System.out.println("Índice: Hosts");
@@ -761,10 +1325,261 @@ public class BusquedasLucene {
     /**
      * Menú para consultas geográficas
      */
-    private void menuQueriesGeograficas(BufferedReader in) throws IOException {
-        System.out.println("\n=== 5. CONSULTAS GEOGRÁFICAS ===");
-        System.out.println("Funcionalidad pendiente de implementar");
-        // TODO: Implementar submenú con opciones para queries geográficas
+    private void menuQueriesGeograficas(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException {
+        while (true) {
+            System.out.println("\n=== 5. CONSULTAS GEOGRÁFICAS ===");
+            System.out.println("5.1. Búsqueda por distancia (lat, lon, radio en metros)");
+            System.out.println("5.2. Ordenar por distancia a un punto (lat, lon)");
+            System.out.println("0. Volver al menú principal");
+            System.out.print("Selecciona opción: ");
+
+            String subOption = in.readLine();
+            if (subOption == null || subOption.trim().isEmpty() || "0".equals(subOption.trim())) {
+                break;
+            }
+
+            try {
+                switch (subOption.trim()) {
+                    case "5.1":
+                    case "1":
+                        ejecutarQueryGeograficaDistancia(analyzer, similarity, in);
+                        break;
+                    case "5.2":
+                    case "2":
+                        ejecutarQueryOrdenadaPorDistancia(analyzer, similarity, in);
+                        break;
+                    default:
+                        System.out.println("Opción no válida.");
+                        continue;
+                }
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * 5.1: Búsqueda geográfica por distancia
+     * Usa LatLonPoint.newDistanceQuery para buscar propiedades dentro de un radio
+     */
+    private void ejecutarQueryGeograficaDistancia(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException {
+        System.out.println("\n=== 5.1: Búsqueda Geográfica por Distancia ===");
+        System.out.println("Busca propiedades dentro de un radio desde un punto (lat, lon)");
+        System.out.println();
+        System.out.println("Rangos típicos para Los Angeles:");
+        System.out.println("  Latitude: 33.339 a 34.811 (media: 34.055)");
+        System.out.println("  Longitude: -118.917 a -117.654 (media: -118.31)");
+        System.out.println();
+        
+        // Solicitar latitud
+        System.out.print("Latitud (ej: 34.0522 para Los Angeles): ");
+        String latStr = in.readLine();
+        if (latStr == null || latStr.trim().isEmpty()) {
+            System.out.println("Latitud requerida. Cancelando.");
+            return;
+        }
+        
+        // Solicitar longitud
+        System.out.print("Longitud (ej: -118.2437 para Los Angeles): ");
+        String lonStr = in.readLine();
+        if (lonStr == null || lonStr.trim().isEmpty()) {
+            System.out.println("Longitud requerida. Cancelando.");
+            return;
+        }
+        
+        // Solicitar radio en metros
+        System.out.print("Radio en metros (ej: 5000 para 5km, 1000 para 1km): ");
+        String radioStr = in.readLine();
+        if (radioStr == null || radioStr.trim().isEmpty()) {
+            System.out.println("Radio requerido. Cancelando.");
+            return;
+        }
+        
+        try {
+            double lat = Double.parseDouble(latStr.trim());
+            double lon = Double.parseDouble(lonStr.trim());
+            double radioMetros = Double.parseDouble(radioStr.trim());
+            
+            // Validar rangos razonables
+            if (lat < 33.0 || lat > 35.0) {
+                System.out.println("Advertencia: latitud fuera del rango típico de Los Angeles (33.339 - 34.811)");
+            }
+            if (lon > -117.0 || lon < -119.0) {
+                System.out.println("Advertencia: longitud fuera del rango típico de Los Angeles (-118.917 - -117.654)");
+            }
+            if (radioMetros <= 0) {
+                System.out.println("Error: el radio debe ser mayor que 0.");
+                return;
+            }
+            
+            // Crear query geográfica usando LatLonPoint.newDistanceQuery
+            // El campo en el índice se llama "location"
+            Query query = LatLonPoint.newDistanceQuery("location", lat, lon, radioMetros);
+            
+            // Ejecutar búsqueda
+            IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+            IndexSearcher searcher = new IndexSearcher(reader);
+            searcher.setSimilarity(similarity);
+            TopDocs hits = searcher.search(query, MAX_RESULTADOS_BUSQUEDA);
+            mostrarResultados(searcher, hits);
+            reader.close();
+            
+            System.out.println();
+            System.out.println("=== Búsqueda Implementada ===");
+            System.out.println("Ubicación: (" + String.format("%.6f", lat) + ", " + String.format("%.6f", lon) + ")");
+            System.out.println("Radio: " + String.format("%.0f", radioMetros) + " metros (" + 
+                String.format("%.2f", radioMetros / 1000.0) + " km)");
+            System.out.println("Índice: Properties");
+            System.out.println("Campo: location (LatLonPoint)");
+        } catch (NumberFormatException e) {
+            System.out.println("Error: valores numéricos inválidos.");
+            System.out.println("Asegúrese de ingresar números válidos para latitud, longitud y radio.");
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 5.2: Consulta ordenada por distancia a un punto geográfico
+     * Similar a 4.1 pero prioriza resultados por distancia geográfica
+     * 
+     * IMPORTANTE: newDistanceFeatureQuery NO filtra documentos, solo ajusta el score.
+     * Fórmula del score: score = weight × (pivotDistanceMeters / (pivotDistanceMeters + distance))
+     * - Si el documento está en el origen: score = weight
+     * - Si está a distancia pivotDistanceMeters: score = weight/2
+     * - Si está más lejos: score decae suavemente hacia cero
+     */
+    private void ejecutarQueryOrdenadaPorDistancia(Analyzer analyzer, Similarity similarity, BufferedReader in) 
+            throws IOException, ParseException {
+        System.out.println("\n=== 5.2: Priorizar por Distancia a un Punto (Properties) ===");
+        System.out.println("Nota: Esta query NO filtra por distancia, solo ajusta el score.");
+        System.out.println("      Los documentos más cercanos al punto tendrán mayor relevancia.");
+        System.out.println("      Si ingresa una consulta, se buscará en el campo 'description' por defecto.");
+        System.out.println("      Si deja la consulta vacía (Enter), se devolverán todos los documentos.");
+        System.out.println();
+        System.out.println("Rangos típicos para Los Angeles:");
+        System.out.println("  Latitude: 33.339 a 34.811 (media: 34.055)");
+        System.out.println("  Longitude: -118.917 a -117.654 (media: -118.31)");
+        System.out.println();
+        
+        // Solicitar consulta opcional
+        System.out.print("Ingrese la consulta textual (o Enter para buscar todos): ");
+        String consulta = in.readLine();
+        
+        Query query = null;
+        if (consulta != null && !consulta.trim().isEmpty()) {
+            // Parsear la consulta si se proporciona
+            QueryParser parser = new QueryParser("description", analyzer);
+            query = parser.parse(consulta.trim());
+        } else {
+            // Crear query que devuelva todos los documentos
+            query = new MatchAllDocsQuery();
+        }
+        
+        // Solicitar punto de referencia para ordenar por distancia
+        System.out.println();
+        System.out.print("Latitud del punto de referencia (ej: 34.0522 para Los Angeles): ");
+        String latStr = in.readLine();
+        if (latStr == null || latStr.trim().isEmpty()) {
+            System.out.println("Latitud requerida. Cancelando.");
+            return;
+        }
+        
+        System.out.print("Longitud del punto de referencia (ej: -118.2437 para Los Angeles): ");
+        String lonStr = in.readLine();
+        if (lonStr == null || lonStr.trim().isEmpty()) {
+            System.out.println("Longitud requerida. Cancelando.");
+            return;
+        }
+        
+        try {
+            double lat = Double.parseDouble(latStr.trim());
+            double lon = Double.parseDouble(lonStr.trim());
+            
+            // Validar rangos razonables
+            if (lat < 33.0 || lat > 35.0) {
+                System.out.println("Advertencia: latitud fuera del rango típico de Los Angeles (33.339 - 34.811)");
+            }
+            if (lon > -117.0 || lon < -119.0) {
+                System.out.println("Advertencia: longitud fuera del rango típico de Los Angeles (-118.917 - -117.654)");
+            }
+            
+            // Solicitar parámetros para newDistanceFeatureQuery
+            System.out.print("Peso (weight) para la query de distancia [default: 1.0]: ");
+            String weightStr = in.readLine();
+            float weight = 1.0f;
+            if (weightStr != null && !weightStr.trim().isEmpty()) {
+                try {
+                    weight = Float.parseFloat(weightStr.trim());
+                } catch (NumberFormatException e) {
+                    System.out.println("Advertencia: peso inválido, usando 1.0 por defecto");
+                    weight = 1.0f;
+                }
+            }
+            
+            System.out.print("Distancia pivote en metros (pivotDistanceMeters) [default: 1000]: ");
+            String pivotStr = in.readLine();
+            double pivotDistanceMeters = 1000.0;
+            if (pivotStr != null && !pivotStr.trim().isEmpty()) {
+                try {
+                    pivotDistanceMeters = Double.parseDouble(pivotStr.trim());
+                } catch (NumberFormatException e) {
+                    System.out.println("Advertencia: distancia pivote inválida, usando 1000 por defecto");
+                    pivotDistanceMeters = 1000.0;
+                }
+            }
+            
+            // Crear query de distancia usando LatLonPoint.newDistanceFeatureQuery
+            // IMPORTANTE: Esta query NO filtra documentos, solo ajusta el score según distancia
+            // El campo en el índice se llama "location"
+            Query distanceFeatureQuery = LatLonPoint.newDistanceFeatureQuery(
+                "location", weight, lat, lon, pivotDistanceMeters);
+            
+            // Combinar la query original con la query de distancia usando BooleanQuery
+            // - query (MUST): filtra los documentos que deben coincidir
+            // - distanceFeatureQuery (SHOULD): ajusta el score según distancia (no filtra)
+            // Esto prioriza documentos más cercanos sin excluir los lejanos
+            BooleanQuery.Builder builder = new BooleanQuery.Builder();
+            builder.add(query, BooleanClause.Occur.MUST);
+            builder.add(distanceFeatureQuery, BooleanClause.Occur.SHOULD);
+            Query combinedQuery = builder.build();
+            
+            // Ejecutar búsqueda
+            // Los resultados se ordenan por score (más cercanos = mayor score)
+            IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPathProperties)));
+            IndexSearcher searcher = new IndexSearcher(reader);
+            searcher.setSimilarity(similarity);
+            TopDocs hits = searcher.search(combinedQuery, MAX_RESULTADOS_BUSQUEDA);
+            mostrarResultados(searcher, hits);
+            reader.close();
+            
+            System.out.println("\n=== CONFIGURACIÓN DE BÚSQUEDA ===");
+            System.out.println("Índice: Properties");
+            System.out.println("Priorización: por distancia a (" + String.format("%.6f", lat) + ", " + 
+                String.format("%.6f", lon) + ") - más cercano = mayor score");
+            System.out.println("Peso (weight): " + weight + " (score máximo cuando distancia = 0)");
+            System.out.println("Distancia pivote: " + String.format("%.0f", pivotDistanceMeters) + 
+                " metros (score = weight/2 a esta distancia)");
+            System.out.println("Fórmula del score: weight × (pivotDistanceMeters / (pivotDistanceMeters + distance))");
+            if (consulta != null && !consulta.trim().isEmpty()) {
+                System.out.println("Campo de búsqueda: description");
+                System.out.println("Consulta: " + consulta.trim());
+            } else {
+                System.out.println("Consulta: Todos los documentos (sin filtro)");
+            }
+            System.out.println("Query usada: newDistanceFeatureQuery (SHOULD) + query original (MUST)");
+            System.out.println("Nota: newDistanceFeatureQuery NO filtra, solo ajusta el score por distancia");
+        } catch (NumberFormatException e) {
+            System.out.println("Error: valores numéricos inválidos.");
+            System.out.println("Asegúrese de ingresar números válidos para latitud y longitud.");
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -1157,7 +1972,7 @@ public class BusquedasLucene {
 
     /**
      * Query combinada: texto + numérica + geográfica
-     * Ejemplo: "apartment" AND price:[100 TO 200] AND location within 5km
+     * Ejemplo: "Entire guesthouse" AND price:[100 TO 200] AND location within 5km
      */
     private Query crearQueryCombinada(Analyzer analyzer, BufferedReader in) 
             throws IOException, org.apache.lucene.queryparser.classic.ParseException {
@@ -1396,8 +2211,8 @@ public class BusquedasLucene {
             if (hostSinceOriginal != null) {
                 System.out.println("Host desde (host_since_original): " + hostSinceOriginal);
             } else if (hostSince != null) {
-                // Si no hay original, mostrar el timestamp
-                System.out.println("Host desde (host_since): " + hostSince + " (epoch millis)");
+                // Si no hay original, mostrar el timestamp formateado como fecha
+                System.out.println("Host desde (host_since): " + formatTimestamp(hostSince));
             }
             if (hostLocation != null) {
                 System.out.println("Ubicación (host_location): " + hostLocation);
